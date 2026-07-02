@@ -306,7 +306,8 @@ public class TicketService {
     }
 
     private void assertTicketVisible(Ticket ticket) {
-        if (isCustomerOnly() && !StpUtil.getLoginIdAsLong().equals(ticket.getCreatorId())) {
+        long currentUserId = StpUtil.getLoginIdAsLong();
+        if (isCustomerOnly() && (ticket.getCreatorId() == null || ticket.getCreatorId() != currentUserId)) {
             throw new IllegalArgumentException("无权访问该工单");
         }
     }
