@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rbac.base.modules.system.mapper.SysFileMapper">
+    <resultMap id="BaseResultMap" type="com.rbac.base.modules.system.entity.SysFile">
+        <id column="id" property="id" />
+        <result column="file_name" property="fileName" />
+        <result column="file_suffix" property="fileSuffix" />
+        <result column="file_size" property="fileSize" />
+        <result column="url" property="url" />
+        <result column="storage_type" property="storageType" />
+        <result column="create_by" property="createBy" />
+        <result column="create_time" property="createTime" />
+        <result column="update_by" property="updateBy" />
+        <result column="update_time" property="updateTime" />
+        <result column="remark" property="remark" />
+        <result column="del_flag" property="delFlag" />
+    </resultMap>
+
+    <sql id="ReportWhere">
+        del_flag = 0
+        <if test="startDateTime != null and endDateTime != null">
+            AND create_time BETWEEN #{startDateTime} AND #{endDateTime}
+        </if>
+        <if test="fileName != null and fileName != ''">
+            AND file_name LIKE CONCAT('%', #{fileName}, '%')
+        </if>
+        <if test="storageType != null and storageType != ''">
+            AND storage_type = #{storageType}
+        </if>
+        <if test="fileSuffixes != null and fileSuffixes.size() > 0">
+            AND COALESCE(file_suffix, '') IN
+            <foreach collection="fileSuffixes" item="suffix" open="(" close=")" separator=",">
+                #{suffix}
+            </foreach>
+        </if>
+    </sql>
+
+    <select id="selectSummary" resultType="com.rbac.base.modules.system.vo.FileStatsSummaryVO">
+        SELECT
+            COUNT(*) AS totalCount,
+            COALESCE(SUM(file_size), 0) AS totalSize,
+            COALESCE(SUM(CASE WHEN DATE(create_time) = CURDATE() THEN 1 ELSE 0 END), 0) AS todayCount,
+            COALESCE(SUM(CASE WHEN DATE(create_time) = CURDATE() THEN file_size ELSE 0 END), 0) AS todaySize
+        FROM sys_file
+        WHERE <include refid="ReportWhere"/>
+    </select>
+
+    <select id="selectTrend" resultType="com.rbac.base.core.common.vo.TrendPointVO">
+        SELECT
+            DATE_FORMAT(create_time, '%Y-%m-%d') AS date,
+            COUNT(*) AS value
+        FROM sys_file
+        WHERE <include refid="ReportWhere"/>
+        GROUP BY DATE_FORMAT(create_time, '%Y-%m-%d')
+        ORDER BY DATE_FORMAT(create_time, '%Y-%m-%d') ASC
+    </select>
+
+    <select id="selectStoragePie" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT storage_type AS name, COUNT(*) AS value
+        FROM sys_file
+        WHERE <include refid="ReportWhere"/>
+        GROUP BY storage_type
+        ORDER BY value DESC, storage_type ASC
+    </select>
+
+    <select id="selectSuffixTop" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT COALESCE(NULLIF(file_suffix, ''), '无后缀') AS name, COUNT(*) AS value
+        FROM sys_file
+        WHERE <include refid="ReportWhere"/>
+        GROUP BY COALESCE(NULLIF(file_suffix, ''), '无后缀')
+        ORDER BY value DESC, name ASC
+        LIMIT 10
+    </select>
+
+    <select id="selectSuffixOptions" resultType="com.rbac.base.modules.system.vo.FileSuffixOptionVO">
+        SELECT
+            suffix_data.label AS label,
+            suffix_data.value AS value,
+            COUNT(*) AS count
+        FROM (
+            SELECT
+                COALESCE(NULLIF(file_suffix, ''), '无后缀') AS label,
+                CASE WHEN file_suffix IS NULL OR file_suffix = '' THEN '__NONE__' ELSE file_suffix END AS value
+            FROM sys_file
+            WHERE del_flag = 0
+        ) suffix_data
+        GROUP BY suffix_data.label, suffix_data.value
+        ORDER BY count DESC, label ASC
+    </select>
+
+    <select id="selectExportRows" resultMap="BaseResultMap">
+        SELECT id, file_name, file_suffix, file_size, url, storage_type, create_by, create_time, update_by, update_time, remark, del_flag
+        FROM sys_file
+        WHERE <include refid="ReportWhere"/>
+        ORDER BY id DESC
+    </select>
+</mapper>

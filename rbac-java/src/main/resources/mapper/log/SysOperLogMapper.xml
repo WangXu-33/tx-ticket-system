@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rbac.base.modules.log.mapper.SysOperLogMapper">
+    <resultMap id="BaseResultMap" type="com.rbac.base.modules.log.entity.SysOperLog">
+        <id column="id" property="id" />
+        <result column="title" property="title" />
+        <result column="business_type" property="businessType" />
+        <result column="method" property="method" />
+        <result column="request_method" property="requestMethod" />
+        <result column="oper_name" property="operName" />
+        <result column="oper_url" property="operUrl" />
+        <result column="oper_ip" property="operIp" />
+        <result column="oper_param" property="operParam" />
+        <result column="json_result" property="jsonResult" />
+        <result column="status" property="status" />
+        <result column="error_msg" property="errorMsg" />
+        <result column="oper_time" property="operTime" />
+        <result column="cost_time" property="costTime" />
+    </resultMap>
+
+    <sql id="ReportWhere">
+        oper_time BETWEEN #{startDateTime} AND #{endDateTime}
+        <if test="title != null and title != ''">
+            AND title LIKE CONCAT('%', #{title}, '%')
+        </if>
+        <if test="operName != null and operName != ''">
+            AND oper_name LIKE CONCAT('%', #{operName}, '%')
+        </if>
+        <if test="businessType != null">
+            AND business_type = #{businessType}
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+    </sql>
+
+    <select id="selectSummary" resultType="com.rbac.base.modules.log.vo.OperLogSummaryVO">
+        SELECT
+            COUNT(*) AS totalCount,
+            COALESCE(SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END), 0) AS successCount,
+            COALESCE(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END), 0) AS failCount,
+            COALESCE(SUM(CASE WHEN DATE(oper_time) = CURDATE() THEN 1 ELSE 0 END), 0) AS todayCount,
+            COALESCE(AVG(cost_time), 0) AS avgCostTime
+        FROM sys_oper_log
+        WHERE <include refid="ReportWhere"/>
+    </select>
+
+    <select id="selectTrend" resultType="com.rbac.base.core.common.vo.TrendPointVO">
+        SELECT
+            DATE_FORMAT(oper_time, '%Y-%m-%d') AS date,
+            COUNT(*) AS value
+        FROM sys_oper_log
+        WHERE <include refid="ReportWhere"/>
+        GROUP BY DATE_FORMAT(oper_time, '%Y-%m-%d')
+        ORDER BY DATE_FORMAT(oper_time, '%Y-%m-%d') ASC
+    </select>
+
+    <select id="selectTopModules" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT title AS name, COUNT(*) AS value
+        FROM sys_oper_log
+        WHERE <include refid="ReportWhere"/>
+        GROUP BY title
+        ORDER BY value DESC, title ASC
+        LIMIT 10
+    </select>
+
+    <select id="selectExportRows" resultMap="BaseResultMap">
+        SELECT id, title, business_type, method, request_method, oper_name, oper_url, oper_ip, oper_param, json_result, status, error_msg, oper_time, cost_time
+        FROM sys_oper_log
+        WHERE <include refid="ReportWhere"/>
+        ORDER BY id DESC
+    </select>
+</mapper>

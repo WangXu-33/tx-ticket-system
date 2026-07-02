@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+target/
+output/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.orig
+
+# Backup files
+*.bak
+*.bak.*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Package manager cache/state
+.pnpm-store/
+.npm/
+.yarn/

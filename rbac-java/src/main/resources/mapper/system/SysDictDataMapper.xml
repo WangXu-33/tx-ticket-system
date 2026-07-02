@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rbac.base.modules.system.mapper.SysDictDataMapper">
+    <resultMap id="BaseResultMap" type="com.rbac.base.modules.system.entity.SysDictData">
+        <id column="id" property="id" />
+        <result column="type_code" property="typeCode" />
+        <result column="parent_id" property="parentId" />
+        <result column="label" property="label" />
+        <result column="value" property="value" />
+        <result column="sort" property="sort" />
+        <result column="status" property="status" />
+        <result column="create_by" property="createBy" />
+        <result column="create_time" property="createTime" />
+        <result column="update_by" property="updateBy" />
+        <result column="update_time" property="updateTime" />
+        <result column="remark" property="remark" />
+        <result column="del_flag" property="delFlag" />
+    </resultMap>
+
+    <select id="selectTypeCodeTop" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT type_code AS name, COUNT(*) AS value
+        FROM sys_dict_data
+        WHERE del_flag = 0
+        GROUP BY type_code
+        ORDER BY value DESC, type_code ASC
+        LIMIT 10
+    </select>
+</mapper>
+

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rbac.base.modules.rbac.mapper.RbacAnalyticsMapper">
+    <select id="selectOverview" resultType="com.rbac.base.modules.rbac.vo.RbacOverviewVO">
+        SELECT
+            (SELECT COUNT(*) FROM sys_user WHERE del_flag = 0) AS userTotal,
+            (SELECT COUNT(*) FROM sys_role WHERE del_flag = 0) AS roleTotal,
+            (SELECT COUNT(*) FROM sys_dept WHERE del_flag = 0) AS deptTotal,
+            (SELECT COUNT(*) FROM sys_menu WHERE del_flag = 0) AS menuTotal,
+            (SELECT COUNT(*) FROM sys_permission WHERE del_flag = 0 AND status = 1) AS permissionTotal,
+            (SELECT COUNT(DISTINCT user_id) FROM sys_user_perm) AS directGrantUserTotal
+    </select>
+
+    <select id="selectRoleDistribution" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT r.role_name AS name, COUNT(ur.user_id) AS value
+        FROM sys_role r
+        LEFT JOIN sys_user_role ur ON ur.role_id = r.id
+        WHERE r.del_flag = 0
+        GROUP BY r.id, r.role_name
+        ORDER BY value DESC, r.id ASC
+        LIMIT 10
+    </select>
+
+    <select id="selectPermissionUsage" resultType="com.rbac.base.modules.rbac.vo.PermissionUsageVO">
+        SELECT
+            p.perm_key AS permKey,
+            p.name AS permName,
+            (SELECT COUNT(*) FROM sys_menu_permission mp WHERE mp.perm_id = p.id) AS menuBindCount,
+            (SELECT COUNT(*) FROM sys_role_perm rp WHERE rp.perm_id = p.id) AS roleBindCount,
+            (SELECT COUNT(*) FROM sys_user_perm up WHERE up.perm_id = p.id) AS userBindCount
+        FROM sys_permission p
+        WHERE p.del_flag = 0
+          AND p.status = 1
+        ORDER BY roleBindCount DESC, userBindCount DESC, menuBindCount DESC, p.id ASC
+    </select>
+
+    <select id="selectUserAuthTop" resultType="com.rbac.base.modules.rbac.vo.UserAuthTopVO">
+        SELECT
+            u.id AS userId,
+            u.nickname AS nickname,
+            COUNT(DISTINCT perm_source.perm_id) AS permissionCount
+        FROM sys_user u
+        LEFT JOIN (
+            SELECT ur.user_id, rp.perm_id
+            FROM sys_user_role ur
+            INNER JOIN sys_role_perm rp ON rp.role_id = ur.role_id
+            UNION ALL
+            SELECT up.user_id, up.perm_id
+            FROM sys_user_perm up
+        ) perm_source ON perm_source.user_id = u.id
+        WHERE u.del_flag = 0
+        GROUP BY u.id, u.nickname
+        ORDER BY permissionCount DESC, u.id ASC
+        LIMIT 10
+    </select>
+</mapper>

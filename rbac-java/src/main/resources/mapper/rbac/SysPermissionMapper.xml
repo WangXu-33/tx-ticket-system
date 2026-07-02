@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rbac.base.modules.rbac.mapper.SysPermissionMapper">
+    <resultMap id="BaseResultMap" type="com.rbac.base.modules.rbac.entity.SysPermission">
+        <id column="id" property="id" />
+        <result column="name" property="name" />
+        <result column="perm_key" property="permKey" />
+        <result column="status" property="status" />
+        <result column="create_by" property="createBy" />
+        <result column="create_time" property="createTime" />
+        <result column="update_by" property="updateBy" />
+        <result column="update_time" property="updateTime" />
+        <result column="remark" property="remark" />
+        <result column="del_flag" property="delFlag" />
+    </resultMap>
+
+    <select id="selectEffectivePermKeysByUserId" resultType="java.lang.String">
+        SELECT DISTINCT t.perm_key
+        FROM (
+            SELECT rp.perm_id
+            FROM sys_role_perm rp
+            INNER JOIN sys_user_role ur ON ur.role_id = rp.role_id
+            WHERE ur.user_id = #{userId}
+            UNION
+            SELECT up.perm_id
+            FROM sys_user_perm up
+            WHERE up.user_id = #{userId}
+        ) t
+        INNER JOIN sys_permission p ON p.id = t.perm_id
+        WHERE p.del_flag = 0
+          AND p.status = 1
+        ORDER BY p.id
+    </select>
+
+    <select id="selectByMenuId" resultMap="BaseResultMap">
+        SELECT p.*
+        FROM sys_permission p
+        INNER JOIN sys_menu_permission mp ON mp.perm_id = p.id
+        WHERE mp.menu_id = #{menuId}
+          AND p.del_flag = 0
+        ORDER BY p.id DESC
+    </select>
+
+    <select id="selectRolePermIds" resultType="java.lang.Long">
+        SELECT perm_id
+        FROM sys_role_perm
+        WHERE role_id = #{roleId}
+        ORDER BY perm_id
+    </select>
+
+    <select id="selectPermissionGrantPage" resultType="com.rbac.base.modules.rbac.vo.PermissionGrantVO">
+        SELECT
+            p.id,
+            p.name,
+            p.perm_key,
+            p.status,
+            COALESCE(GROUP_CONCAT(DISTINCT m.title ORDER BY m.sort SEPARATOR ' / '), '') AS menu_titles
+        FROM sys_permission p
+        LEFT JOIN sys_menu_permission mp ON mp.perm_id = p.id
+        LEFT JOIN sys_menu m ON m.id = mp.menu_id AND m.del_flag = 0
+        WHERE p.del_flag = 0
+          AND p.status = 1
+        <if test="keyword != null and keyword != ''">
+            <bind name="likeKeyword" value="'%' + keyword + '%'" />
+            AND (p.name LIKE #{likeKeyword} OR p.perm_key LIKE #{likeKeyword})
+        </if>
+        <if test="menuId != null">
+            AND EXISTS (
+                SELECT 1
+                FROM sys_menu_permission x
+                WHERE x.perm_id = p.id
+                  AND x.menu_id = #{menuId}
+            )
+        </if>
+        GROUP BY p.id, p.name, p.perm_key, p.status
+        ORDER BY p.id DESC
+    </select>
+</mapper>
+

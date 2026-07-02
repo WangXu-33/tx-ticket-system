@@ -1,0 +1,115 @@
+<template>
+  <div class="page-container">
+    <a-card :bordered="false" class="detail-card" v-if="ticket">
+      <template #title>
+        <span>{{ ticket.ticketNo }} - {{ ticket.title }}</span>
+      </template>
+      <template #extra>
+        <a-space>
+          <a-button @click="router.back()">返回</a-button>
+          <a-button type="primary" @click="resolveVisible = true">标记解决</a-button>
+          <a-button @click="closeTicket">关闭</a-button>
+        </a-space>
+      </template>
+
+      <a-descriptions bordered :column="2">
+        <a-descriptions-item label="状态">{{ statusText(ticket.status) }}</a-descriptions-item>
+        <a-descriptions-item label="优先级">{{ ticket.priority }}</a-descriptions-item>
+        <a-descriptions-item label="客户">{{ ticket.creatorName }}</a-descriptions-item>
+        <a-descriptions-item label="处理人">{{ ticket.handlerName || '未分派' }}</a-descriptions-item>
+        <a-descriptions-item label="问题描述" :span="2">{{ ticket.description }}</a-descriptions-item>
+        <a-descriptions-item v-if="ticket.solution" label="解决方案" :span="2">{{ ticket.solution }}</a-descriptions-item>
+      </a-descriptions>
+    </a-card>
+
+    <a-row :gutter="16" style="margin-top: 16px">
+      <a-col :xs="24" :lg="14">
+        <a-card title="流程记录" :bordered="false">
+          <a-timeline>
+            <a-timeline-item v-for="flow in flows" :key="flow.id">
+              <strong>{{ actionText(flow.action) }}</strong>
+              <p>{{ flow.content }}</p>
+              <small>{{ flow.operatorName }} · {{ flow.createTime }}</small>
+            </a-timeline-item>
+          </a-timeline>
+        </a-card>
+      </a-col>
+      <a-col :xs="24" :lg="10">
+        <a-card title="回复工单" :bordered="false">
+          <a-form layout="vertical" :model="replyForm">
+            <a-form-item label="回复内容">
+              <a-textarea v-model:value="replyForm.content" :rows="6" />
+            </a-form-item>
+            <a-form-item label="可见范围">
+              <a-radio-group v-model:value="replyForm.visibleScope">
+                <a-radio value="public">客户可见</a-radio>
+                <a-radio value="internal">内部备注</a-radio>
+              </a-radio-group>
+            </a-form-item>
+            <a-button type="primary" block @click="submitReply">提交回复</a-button>
+          </a-form>
+        </a-card>
+      </a-col>
+    </a-row>
+
+    <a-modal v-model:open="resolveVisible" title="标记工单已解决" @ok="submitResolve">
+      <a-textarea v-model:value="resolveForm.solution" :rows="6" placeholder="填写最终解决方案，后续可沉淀为知识库" />
+    </a-modal>
+  </div>
+</template>
+
+<script setup>
+import { onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
+import request from '@/api/request'
+
+const route = useRoute()
+const router = useRouter()
+const ticket = ref(null)
+const flows = ref([])
+const resolveVisible = ref(false)
+const replyForm = reactive({ ticketId: null, content: '', visibleScope: 'public' })
+const resolveForm = reactive({ ticketId: null, solution: '' })
+
+const fetchDetail = async () => {
+  const res = await request.get(`/ticket/detail/${route.params.id}`)
+  ticket.value = res.data.ticket
+  flows.value = res.data.flows || []
+  replyForm.ticketId = ticket.value.id
+  resolveForm.ticketId = ticket.value.id
+}
+
+const submitReply = async () => {
+  await request.post('/ticket/reply', replyForm)
+  message.success('回复已保存')
+  replyForm.content = ''
+  fetchDetail()
+}
+
+const submitResolve = async () => {
+  await request.post('/ticket/resolve', resolveForm)
+  message.success('工单已标记解决')
+  resolveVisible.value = false
+  resolveForm.solution = ''
+  fetchDetail()
+}
+
+const closeTicket = async () => {
+  await request.post(`/ticket/close/${ticket.value.id}`)
+  message.success('工单已关闭')
+  fetchDetail()
+}
+
+const statusText = (value) => ({ pending: '待受理', processing: '处理中', waiting_customer: '待客户补充', transferred: '已转派', resolved: '已解决', closed: '已关闭', rejected: '已驳回' }[value] || value)
+const actionText = (value) => ({ created: '创建工单', received: '接单', replied: '回复', assigned: '分派', transferred: '转派', resolved: '解决', closed: '关闭', rejected: '驳回' }[value] || value)
+
+onMounted(fetchDetail)
+</script>
+
+<style scoped>
+.detail-card :deep(.ant-card-head-title) {
+  font-size: 18px;
+  font-weight: 800;
+}
+</style>

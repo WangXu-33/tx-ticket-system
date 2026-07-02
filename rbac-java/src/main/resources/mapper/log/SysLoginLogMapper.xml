@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rbac.base.modules.log.mapper.SysLoginLogMapper">
+    <resultMap id="BaseResultMap" type="com.rbac.base.modules.log.entity.SysLoginLog">
+        <id column="id" property="id" />
+        <result column="username" property="username" />
+        <result column="ipaddr" property="ipaddr" />
+        <result column="login_location" property="loginLocation" />
+        <result column="browser" property="browser" />
+        <result column="os" property="os" />
+        <result column="status" property="status" />
+        <result column="msg" property="msg" />
+        <result column="login_time" property="loginTime" />
+    </resultMap>
+
+    <sql id="ReportWhere">
+        login_time BETWEEN #{startDateTime} AND #{endDateTime}
+        <if test="username != null and username != ''">
+            AND username LIKE CONCAT('%', #{username}, '%')
+        </if>
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+    </sql>
+
+    <select id="selectSummary" resultType="com.rbac.base.modules.log.vo.LoginLogSummaryVO">
+        SELECT
+            COUNT(*) AS totalCount,
+            COALESCE(SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END), 0) AS successCount,
+            COALESCE(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END), 0) AS failCount,
+            COALESCE(SUM(CASE WHEN DATE(login_time) = CURDATE() THEN 1 ELSE 0 END), 0) AS todayCount
+        FROM sys_login_log
+        WHERE <include refid="ReportWhere"/>
+    </select>
+
+    <select id="selectTrend" resultType="com.rbac.base.core.common.vo.TrendPointVO">
+        SELECT
+            DATE_FORMAT(login_time, '%Y-%m-%d') AS date,
+            COUNT(*) AS value
+        FROM sys_login_log
+        WHERE <include refid="ReportWhere"/>
+        GROUP BY DATE_FORMAT(login_time, '%Y-%m-%d')
+        ORDER BY DATE_FORMAT(login_time, '%Y-%m-%d') ASC
+    </select>
+
+    <select id="selectStatusPie" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT
+            CASE WHEN status = 0 THEN '成功' ELSE '失败' END AS name,
+            COUNT(*) AS value
+        FROM sys_login_log
+        WHERE <include refid="ReportWhere"/>
+        GROUP BY status
+        ORDER BY status ASC
+    </select>
+
+    <select id="selectExportRows" resultMap="BaseResultMap">
+        SELECT id, username, ipaddr, login_location, browser, os, status, msg, login_time
+        FROM sys_login_log
+        WHERE <include refid="ReportWhere"/>
+        ORDER BY id DESC
+    </select>
+</mapper>

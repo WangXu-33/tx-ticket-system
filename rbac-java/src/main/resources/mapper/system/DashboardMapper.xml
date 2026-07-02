@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.rbac.base.modules.system.mapper.DashboardMapper">
+    <select id="selectOverview" resultType="com.rbac.base.modules.system.vo.DashboardOverviewVO">
+        SELECT
+            (SELECT COUNT(*) FROM sys_user WHERE del_flag = 0) AS userTotal,
+            (SELECT COUNT(*) FROM sys_user WHERE del_flag = 0 AND status = 1) AS enabledUserTotal,
+            (SELECT COUNT(*) FROM sys_dept WHERE del_flag = 0) AS deptTotal,
+            (SELECT COUNT(*) FROM sys_role WHERE del_flag = 0) AS roleTotal,
+            (SELECT COUNT(*) FROM sys_menu WHERE del_flag = 0) AS menuTotal,
+            (SELECT COUNT(*) FROM sys_permission WHERE del_flag = 0 AND status = 1) AS permissionTotal,
+            (SELECT COUNT(*) FROM sys_file WHERE del_flag = 0) AS fileTotal,
+            (SELECT COALESCE(SUM(file_size), 0) FROM sys_file WHERE del_flag = 0) AS fileTotalSize,
+            (SELECT COUNT(*) FROM sys_login_log WHERE DATE(login_time) = CURDATE()) AS todayLoginTotal,
+            (SELECT COUNT(*) FROM sys_oper_log WHERE DATE(oper_time) = CURDATE()) AS todayOperTotal
+    </select>
+
+    <select id="selectLoginTrend" resultType="com.rbac.base.core.common.vo.TrendPointVO">
+        SELECT DATE_FORMAT(login_time, '%Y-%m-%d') AS date, COUNT(*) AS value
+        FROM sys_login_log
+        WHERE login_time BETWEEN #{startDateTime} AND #{endDateTime}
+        GROUP BY DATE_FORMAT(login_time, '%Y-%m-%d')
+        ORDER BY DATE_FORMAT(login_time, '%Y-%m-%d') ASC
+    </select>
+
+    <select id="selectOperTrend" resultType="com.rbac.base.core.common.vo.TrendPointVO">
+        SELECT DATE_FORMAT(oper_time, '%Y-%m-%d') AS date, COUNT(*) AS value
+        FROM sys_oper_log
+        WHERE oper_time BETWEEN #{startDateTime} AND #{endDateTime}
+        GROUP BY DATE_FORMAT(oper_time, '%Y-%m-%d')
+        ORDER BY DATE_FORMAT(oper_time, '%Y-%m-%d') ASC
+    </select>
+
+    <select id="selectFileUploadTrend" resultType="com.rbac.base.core.common.vo.TrendPointVO">
+        SELECT DATE_FORMAT(create_time, '%Y-%m-%d') AS date, COUNT(*) AS value
+        FROM sys_file
+        WHERE del_flag = 0
+          AND create_time BETWEEN #{startDateTime} AND #{endDateTime}
+        GROUP BY DATE_FORMAT(create_time, '%Y-%m-%d')
+        ORDER BY DATE_FORMAT(create_time, '%Y-%m-%d') ASC
+    </select>
+
+    <select id="selectLoginStatusPie" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT CASE WHEN status = 0 THEN '成功' ELSE '失败' END AS name, COUNT(*) AS value
+        FROM sys_login_log
+        WHERE login_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        GROUP BY status
+        ORDER BY status ASC
+    </select>
+
+    <select id="selectFileStoragePie" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT storage_type AS name, COUNT(*) AS value
+        FROM sys_file
+        WHERE del_flag = 0
+        GROUP BY storage_type
+        ORDER BY value DESC, storage_type ASC
+    </select>
+
+    <select id="selectDeptUserTop" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT d.dept_name AS name, COUNT(u.id) AS value
+        FROM sys_dept d
+        LEFT JOIN sys_user u ON u.dept_id = d.id AND u.del_flag = 0
+        WHERE d.del_flag = 0
+        GROUP BY d.id, d.dept_name
+        ORDER BY value DESC, d.id ASC
+        LIMIT 10
+    </select>
+
+    <select id="selectRoleUserTop" resultType="com.rbac.base.core.common.vo.NameValueVO">
+        SELECT r.role_name AS name, COUNT(ur.user_id) AS value
+        FROM sys_role r
+        LEFT JOIN sys_user_role ur ON ur.role_id = r.id
+        WHERE r.del_flag = 0
+        GROUP BY r.id, r.role_name
+        ORDER BY value DESC, r.id ASC
+        LIMIT 10
+    </select>
+</mapper>
