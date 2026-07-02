@@ -6,8 +6,8 @@
     <section class="brand-panel">
       <p class="eyebrow">TX Ticket System</p>
       <h1>头绪工单系统</h1>
-      <p class="subtitle">客户提单、运维流转、知识沉淀的一体化服务台。</p>
-      <div class="flow-line">
+      <p class="subtitle">客户提单、运维流转、附件留痕、知识沉淀的一体化服务台。</p>
+      <div class="flow-line" aria-label="工单处理流程">
         <span>提交</span>
         <i></i>
         <span>受理</span>
@@ -53,7 +53,7 @@
             <a-form-item name="password" label="密码" :rules="[{ required: true, message: '请输入密码' }]">
               <a-input-password v-model:value="registerForm.password" size="large" placeholder="请设置密码" />
             </a-form-item>
-            <a-button type="primary" html-type="submit" block size="large" :loading="loading">注册客户账号</a-button>
+            <a-button type="primary" html-type="submit" block size="large" :loading="loading">注册并进入系统</a-button>
           </a-form>
         </a-tab-pane>
       </a-tabs>
@@ -75,34 +75,56 @@ const loading = ref(false)
 const loginForm = reactive({ username: 'admin', password: '' })
 const registerForm = reactive({ username: '', nickname: '', phone: '', email: '', password: '' })
 
-const handleLogin = async (values) => {
+/**
+ * 修改时间：2026-07-02
+ * 功能说明：完成登录后的令牌、用户信息和权限缓存写入。
+ * 入参：登录凭证、成功提示文案。
+ * 出参：无。
+ * 异常场景：接口失败时由请求拦截器统一提示。
+ */
+const completeLogin = async (credentials, successText = '登录成功') => {
+  const res = await request.post('/auth/login', credentials)
+  localStorage.setItem('token', res.data.token)
+  localStorage.setItem('user', JSON.stringify(res.data.user))
+  const info = await request.get('/auth/info')
+  localStorage.setItem('permissions', JSON.stringify(info.data.permissions))
+  refreshPermissionCache()
+  message.success(successText)
+  router.push('/')
+}
+
+/**
+ * 修改时间：2026-07-02
+ * 功能说明：处理账号密码登录。
+ * 入参：表单校验后的登录凭证。
+ * 出参：无。
+ * 异常场景：接口失败时保持当前表单，方便用户修正后重试。
+ */
+const handleLogin = async values => {
   loading.value = true
   try {
-    const res = await request.post('/auth/login', values)
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('user', JSON.stringify(res.data.user))
-    const info = await request.get('/auth/info')
-    localStorage.setItem('permissions', JSON.stringify(info.data.permissions))
-    refreshPermissionCache()
-    message.success('登录成功')
-    router.push('/')
+    await completeLogin(values)
   } finally {
     loading.value = false
   }
 }
 
+/**
+ * 修改时间：2026-07-02
+ * 功能说明：处理客户注册，注册成功后自动登录，避免切回登录页造成密码丢失或误输。
+ * 入参：无，读取注册表单。
+ * 出参：无。
+ * 异常场景：注册或登录失败时保持注册表单，方便用户继续修正。
+ */
 const handleRegister = async () => {
   loading.value = true
+  const credentials = {
+    username: registerForm.username,
+    password: registerForm.password
+  }
   try {
-    await request.post('/auth/register', registerForm)
-    message.success('注册成功，请登录')
-    activeTab.value = 'login'
-    loginForm.username = registerForm.username
-    registerForm.username = ''
-    registerForm.nickname = ''
-    registerForm.phone = ''
-    registerForm.email = ''
-    registerForm.password = ''
+    await request.post('/auth/register', { ...registerForm })
+    await completeLogin(credentials, '注册成功，已自动登录')
   } finally {
     loading.value = false
   }
@@ -120,7 +142,7 @@ const handleRegister = async () => {
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(15, 118, 110, 0.82)),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(15, 118, 110, 0.84)),
     radial-gradient(circle at 10% 20%, rgba(20, 184, 166, 0.42), transparent 26%),
     #0f172a;
 }

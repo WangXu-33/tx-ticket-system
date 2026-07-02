@@ -202,7 +202,53 @@ CREATE TABLE `sys_login_log` (
   KEY `idx_login_log_username_status_time` (`username`,`status`,`login_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统访问记录';
 
--- 11. 文件资源表
+-- 11. 公告消息表
+DROP TABLE IF EXISTS `sys_notice_target`;
+DROP TABLE IF EXISTS `sys_notice_recipient`;
+DROP TABLE IF EXISTS `sys_notice`;
+CREATE TABLE `sys_notice` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '公告ID',
+  `title` varchar(150) NOT NULL COMMENT '公告标题',
+  `content` text NOT NULL COMMENT '公告正文',
+  `notice_type` varchar(30) DEFAULT '公告' COMMENT '公告类型',
+  `priority` varchar(30) DEFAULT '普通' COMMENT '优先级',
+  `status` tinyint DEFAULT 0 COMMENT '状态 0草稿 1已发布 2已撤回',
+  `publish_time` datetime DEFAULT NULL COMMENT '发布时间',
+  `create_by` bigint DEFAULT NULL COMMENT '创建人',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_by` bigint DEFAULT NULL COMMENT '更新人',
+  `update_time` datetime DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `del_flag` tinyint DEFAULT 0 COMMENT '删除标志 0正常 1删除',
+  PRIMARY KEY (`id`),
+  KEY `idx_notice_status_time` (`status`,`publish_time`),
+  KEY `idx_notice_type_priority` (`notice_type`,`priority`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公告消息表';
+
+CREATE TABLE `sys_notice_recipient` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '接收记录ID',
+  `notice_id` bigint NOT NULL COMMENT '公告ID',
+  `user_id` bigint NOT NULL COMMENT '接收用户ID',
+  `read_flag` tinyint DEFAULT 0 COMMENT '是否已读 0未读 1已读',
+  `read_time` datetime DEFAULT NULL COMMENT '阅读时间',
+  `receive_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '接收时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_notice_recipient_user` (`notice_id`,`user_id`),
+  KEY `idx_notice_recipient_user_read` (`user_id`,`read_flag`,`receive_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公告接收人表';
+
+CREATE TABLE `sys_notice_target` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '发布范围ID',
+  `notice_id` bigint NOT NULL COMMENT '公告ID',
+  `target_type` varchar(20) NOT NULL COMMENT '目标类型 ALL/DEPT/ROLE/USER',
+  `target_id` bigint DEFAULT NULL COMMENT '目标ID',
+  `effect` varchar(20) DEFAULT 'INCLUDE' COMMENT '作用 INCLUDE/EXCLUDE',
+  PRIMARY KEY (`id`),
+  KEY `idx_notice_target_notice` (`notice_id`),
+  KEY `idx_notice_target_type` (`target_type`,`target_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公告发布范围表';
+
+-- 12. 文件资源表
 DROP TABLE IF EXISTS `sys_file`;
 CREATE TABLE `sys_file` (
   `id` bigint NOT NULL AUTO_INCREMENT,

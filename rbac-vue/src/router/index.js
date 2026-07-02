@@ -15,7 +15,7 @@ const routes = [
       {
         path: 'dashboard',
         component: () => import('../views/system/dashboard/index.vue'),
-        meta: { title: '首页', permission: ['sys:dashboard:list'] }
+        meta: { title: '首页' }
       },
       {
         path: 'ticket/workbench',
