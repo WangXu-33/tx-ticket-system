@@ -5,11 +5,12 @@
         <span>{{ ticket.ticketNo }} - {{ ticket.title }}</span>
       </template>
       <template #extra>
-        <a-space>
-          <a-button @click="router.back()">返回</a-button>
-          <a-button type="primary" @click="resolveVisible = true">标记解决</a-button>
-          <a-button @click="closeTicket">关闭</a-button>
-        </a-space>
+          <a-space>
+            <a-button @click="router.back()">返回</a-button>
+          <a-button v-if="canEditKnowledge && ticket.solution" @click="draftKnowledge">沉淀知识库</a-button>
+            <a-button type="primary" @click="resolveVisible = true">标记解决</a-button>
+            <a-button @click="closeTicket">关闭</a-button>
+          </a-space>
       </template>
 
       <a-descriptions bordered :column="2">
@@ -20,6 +21,21 @@
         <a-descriptions-item label="问题描述" :span="2">{{ ticket.description }}</a-descriptions-item>
         <a-descriptions-item v-if="ticket.solution" label="解决方案" :span="2">{{ ticket.solution }}</a-descriptions-item>
       </a-descriptions>
+
+      <a-divider />
+      <h3>工单附件</h3>
+      <a-empty v-if="!files.length" description="暂无附件" />
+      <a-list v-else :data-source="files" size="small">
+        <template #renderItem="{ item }">
+          <a-list-item>
+            <a-space>
+              <a :href="buildFilePreviewUrl(item.id)" target="_blank">{{ item.fileName }}</a>
+              <span class="muted">{{ formatFileSize(item.fileSize) }}</span>
+              <a :href="buildFileDownloadUrl(item.id)" target="_blank">下载</a>
+            </a-space>
+          </a-list-item>
+        </template>
+      </a-list>
     </a-card>
 
     <a-row :gutter="16" style="margin-top: 16px">
@@ -46,6 +62,16 @@
                 <a-radio value="internal">内部备注</a-radio>
               </a-radio-group>
             </a-form-item>
+            <a-form-item label="回复附件">
+              <a-upload :showUploadList="false" :customRequest="uploadReplyFile">
+                <a-button>上传附件</a-button>
+              </a-upload>
+              <a-list v-if="replyFiles.length" size="small" :data-source="replyFiles" class="file-list">
+                <template #renderItem="{ item }">
+                  <a-list-item>{{ item.fileName }}（{{ formatFileSize(item.fileSize) }}）</a-list-item>
+                </template>
+              </a-list>
+            </a-form-item>
             <a-button type="primary" block @click="submitReply">提交回复</a-button>
           </a-form>
         </a-card>
@@ -54,28 +80,45 @@
 
     <a-modal v-model:open="resolveVisible" title="标记工单已解决" @ok="submitResolve">
       <a-textarea v-model:value="resolveForm.solution" :rows="6" placeholder="填写最终解决方案，后续可沉淀为知识库" />
+      <a-divider />
+      <a-upload :showUploadList="false" :customRequest="uploadResolveFile">
+        <a-button>上传解决附件</a-button>
+      </a-upload>
+      <a-list v-if="resolveFiles.length" size="small" :data-source="resolveFiles" class="file-list">
+        <template #renderItem="{ item }">
+          <a-list-item>{{ item.fileName }}（{{ formatFileSize(item.fileSize) }}）</a-list-item>
+        </template>
+      </a-list>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import request from '@/api/request'
+import { buildFileDownloadUrl, buildFilePreviewUrl } from '@/utils/file'
+import { createUploadRequest, formatFileSize } from '@/utils/upload'
+import { hasAnyPermission } from '@/utils/permission'
 
 const route = useRoute()
 const router = useRouter()
 const ticket = ref(null)
 const flows = ref([])
+const files = ref([])
+const replyFiles = ref([])
+const resolveFiles = ref([])
 const resolveVisible = ref(false)
-const replyForm = reactive({ ticketId: null, content: '', visibleScope: 'public' })
-const resolveForm = reactive({ ticketId: null, solution: '' })
+const replyForm = reactive({ ticketId: null, content: '', visibleScope: 'public', fileIds: [] })
+const resolveForm = reactive({ ticketId: null, solution: '', fileIds: [] })
+const canEditKnowledge = computed(() => hasAnyPermission(['knowledge:edit']))
 
 const fetchDetail = async () => {
   const res = await request.get(`/ticket/detail/${route.params.id}`)
   ticket.value = res.data.ticket
   flows.value = res.data.flows || []
+  files.value = res.data.files || []
   replyForm.ticketId = ticket.value.id
   resolveForm.ticketId = ticket.value.id
 }
@@ -84,6 +127,8 @@ const submitReply = async () => {
   await request.post('/ticket/reply', replyForm)
   message.success('回复已保存')
   replyForm.content = ''
+  replyForm.fileIds = []
+  replyFiles.value = []
   fetchDetail()
 }
 
@@ -92,6 +137,8 @@ const submitResolve = async () => {
   message.success('工单已标记解决')
   resolveVisible.value = false
   resolveForm.solution = ''
+  resolveForm.fileIds = []
+  resolveFiles.value = []
   fetchDetail()
 }
 
@@ -100,6 +147,24 @@ const closeTicket = async () => {
   message.success('工单已关闭')
   fetchDetail()
 }
+
+const draftKnowledge = async () => {
+  const res = await request.post(`/knowledge/draft-from-ticket/${ticket.value.id}`)
+  message.success('知识库草稿已生成')
+  router.push(`/ticket/knowledge/detail/${res.data}`)
+}
+
+const uploadReplyFile = createUploadRequest((file) => {
+  replyForm.fileIds.push(file.id)
+  replyFiles.value.push(file)
+  message.success('附件上传成功')
+})
+
+const uploadResolveFile = createUploadRequest((file) => {
+  resolveForm.fileIds.push(file.id)
+  resolveFiles.value.push(file)
+  message.success('附件上传成功')
+})
 
 const statusText = (value) => ({ pending: '待受理', processing: '处理中', waiting_customer: '待客户补充', transferred: '已转派', resolved: '已解决', closed: '已关闭', rejected: '已驳回' }[value] || value)
 const actionText = (value) => ({ created: '创建工单', received: '接单', replied: '回复', assigned: '分派', transferred: '转派', resolved: '解决', closed: '关闭', rejected: '驳回' }[value] || value)
@@ -111,5 +176,13 @@ onMounted(fetchDetail)
 .detail-card :deep(.ant-card-head-title) {
   font-size: 18px;
   font-weight: 800;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.file-list {
+  margin-top: 10px;
 }
 </style>

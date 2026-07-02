@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.rbac.base.modules.rbac.entity.SysUser;
 import com.rbac.base.modules.rbac.mapper.SysUserMapper;
+import com.rbac.base.modules.system.entity.SysFile;
+import com.rbac.base.modules.system.mapper.SysFileMapper;
 import com.rbac.base.modules.ticket.dto.TicketAssignDTO;
 import com.rbac.base.modules.ticket.dto.TicketCreateDTO;
 import com.rbac.base.modules.ticket.dto.TicketReplyDTO;
@@ -48,15 +50,18 @@ public class TicketService {
     private final TicketFlowMapper ticketFlowMapper;
     private final TicketAttachmentMapper ticketAttachmentMapper;
     private final SysUserMapper userMapper;
+    private final SysFileMapper sysFileMapper;
 
     public TicketService(TicketMapper ticketMapper,
                          TicketFlowMapper ticketFlowMapper,
                          TicketAttachmentMapper ticketAttachmentMapper,
-                         SysUserMapper userMapper) {
+                         SysUserMapper userMapper,
+                         SysFileMapper sysFileMapper) {
         this.ticketMapper = ticketMapper;
         this.ticketFlowMapper = ticketFlowMapper;
         this.ticketAttachmentMapper = ticketAttachmentMapper;
         this.userMapper = userMapper;
+        this.sysFileMapper = sysFileMapper;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -123,6 +128,7 @@ public class TicketService {
         data.put("attachments", ticketAttachmentMapper.selectList(new LambdaQueryWrapper<TicketAttachment>()
                 .eq(TicketAttachment::getTicketId, id)
                 .orderByAsc(TicketAttachment::getId)));
+        data.put("files", listTicketFiles(id));
         return data;
     }
 
@@ -249,6 +255,10 @@ public class TicketService {
             if (fileId == null) {
                 continue;
             }
+            // 附件关联必须指向已存在的 sys_file，避免产生不可访问的孤儿业务附件。
+            if (sysFileMapper.selectById(fileId) == null) {
+                continue;
+            }
             TicketAttachment attachment = new TicketAttachment();
             attachment.setBusinessType(businessType);
             attachment.setTicketId(ticketId);
@@ -259,6 +269,21 @@ public class TicketService {
             attachment.setUploadUserId(userId);
             ticketAttachmentMapper.insert(attachment);
         }
+    }
+
+    private List<SysFile> listTicketFiles(Long ticketId) {
+        List<TicketAttachment> attachments = ticketAttachmentMapper.selectList(new LambdaQueryWrapper<TicketAttachment>()
+                .eq(TicketAttachment::getTicketId, ticketId)
+                .isNotNull(TicketAttachment::getFileId)
+                .orderByAsc(TicketAttachment::getId));
+        List<Long> fileIds = attachments.stream()
+                .map(TicketAttachment::getFileId)
+                .distinct()
+                .toList();
+        if (fileIds.isEmpty()) {
+            return List.of();
+        }
+        return sysFileMapper.selectBatchIds(fileIds);
     }
 
     private Ticket requireTicket(Long id) {

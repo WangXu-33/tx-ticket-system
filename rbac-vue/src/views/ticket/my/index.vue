@@ -66,6 +66,16 @@
             </a-form-item>
           </a-col>
         </a-row>
+        <a-form-item label="附件">
+          <a-upload :showUploadList="false" :customRequest="uploadCreateFile">
+            <a-button>上传图片/附件</a-button>
+          </a-upload>
+          <a-list v-if="createFiles.length" size="small" :data-source="createFiles" class="file-list">
+            <template #renderItem="{ item }">
+              <a-list-item>{{ item.fileName }}（{{ formatFileSize(item.fileSize) }}）</a-list-item>
+            </template>
+          </a-list>
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -76,11 +86,13 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import request from '@/api/request'
+import { createUploadRequest, formatFileSize } from '@/utils/upload'
 
 const router = useRouter()
 const loading = ref(false)
 const createVisible = ref(false)
 const dataSource = ref([])
+const createFiles = ref([])
 const query = reactive({ owner: 'customer', pageNum: 1, pageSize: 10 })
 const form = reactive({ title: '', description: '', category: 'general', priority: 'normal', contactPhone: '', contactEmail: '', fileIds: [] })
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showSizeChanger: true })
@@ -117,8 +129,16 @@ const submitTicket = async () => {
   createVisible.value = false
   form.title = ''
   form.description = ''
+  form.fileIds = []
+  createFiles.value = []
   fetchData()
 }
+
+const uploadCreateFile = createUploadRequest((file) => {
+  form.fileIds.push(file.id)
+  createFiles.value.push(file)
+  message.success('附件上传成功')
+})
 
 const goDetail = (id) => router.push(`/ticket/detail/${id}`)
 const statusText = (value) => ({ pending: '待受理', processing: '处理中', waiting_customer: '待客户补充', transferred: '已转派', resolved: '已解决', closed: '已关闭', rejected: '已驳回' }[value] || value)
@@ -145,5 +165,9 @@ h2 {
 p {
   margin: 0;
   color: #64748b;
+}
+
+.file-list {
+  margin-top: 10px;
 }
 </style>

@@ -3,6 +3,8 @@ package com.rbac.base.modules.ticket.service;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.rbac.base.modules.system.entity.SysFile;
+import com.rbac.base.modules.system.mapper.SysFileMapper;
 import com.rbac.base.modules.ticket.dto.KnowledgeSaveDTO;
 import com.rbac.base.modules.ticket.entity.KnowledgeArticle;
 import com.rbac.base.modules.ticket.entity.KnowledgeTicketLink;
@@ -38,15 +40,18 @@ public class KnowledgeService {
     private final KnowledgeTicketLinkMapper linkMapper;
     private final TicketMapper ticketMapper;
     private final TicketAttachmentMapper attachmentMapper;
+    private final SysFileMapper sysFileMapper;
 
     public KnowledgeService(KnowledgeArticleMapper articleMapper,
                             KnowledgeTicketLinkMapper linkMapper,
                             TicketMapper ticketMapper,
-                            TicketAttachmentMapper attachmentMapper) {
+                            TicketAttachmentMapper attachmentMapper,
+                            SysFileMapper sysFileMapper) {
         this.articleMapper = articleMapper;
         this.linkMapper = linkMapper;
         this.ticketMapper = ticketMapper;
         this.attachmentMapper = attachmentMapper;
+        this.sysFileMapper = sysFileMapper;
     }
 
     public Page<KnowledgeArticle> page(Integer pageNum, Integer pageSize, String keyword, String category, String status) {
@@ -77,6 +82,7 @@ public class KnowledgeService {
         data.put("attachments", attachmentMapper.selectList(new LambdaQueryWrapper<TicketAttachment>()
                 .eq(TicketAttachment::getArticleId, id)
                 .orderByAsc(TicketAttachment::getId)));
+        data.put("files", listArticleFiles(id));
         return data;
     }
 
@@ -164,6 +170,16 @@ public class KnowledgeService {
             if (ticketId == null) {
                 continue;
             }
+            if (ticketMapper.selectById(ticketId) == null) {
+                continue;
+            }
+            Long existing = linkMapper.selectCount(new LambdaQueryWrapper<KnowledgeTicketLink>()
+                    .eq(KnowledgeTicketLink::getArticleId, articleId)
+                    .eq(KnowledgeTicketLink::getTicketId, ticketId)
+                    .eq(KnowledgeTicketLink::getLinkType, linkType));
+            if (existing != null && existing > 0) {
+                continue;
+            }
             KnowledgeTicketLink link = new KnowledgeTicketLink();
             link.setArticleId(articleId);
             link.setTicketId(ticketId);
@@ -181,6 +197,17 @@ public class KnowledgeService {
             if (fileId == null) {
                 continue;
             }
+            // 附件必须先进入 sys_file，再建立知识库关联，保证后续预览和下载可追溯。
+            if (sysFileMapper.selectById(fileId) == null) {
+                continue;
+            }
+            Long existing = attachmentMapper.selectCount(new LambdaQueryWrapper<TicketAttachment>()
+                    .eq(TicketAttachment::getArticleId, articleId)
+                    .eq(TicketAttachment::getFileId, fileId)
+                    .eq(TicketAttachment::getBusinessType, "knowledge"));
+            if (existing != null && existing > 0) {
+                continue;
+            }
             TicketAttachment attachment = new TicketAttachment();
             attachment.setBusinessType("knowledge");
             attachment.setArticleId(articleId);
@@ -189,6 +216,21 @@ public class KnowledgeService {
             attachment.setUploadUserId(userId);
             attachmentMapper.insert(attachment);
         }
+    }
+
+    private List<SysFile> listArticleFiles(Long articleId) {
+        List<TicketAttachment> attachments = attachmentMapper.selectList(new LambdaQueryWrapper<TicketAttachment>()
+                .eq(TicketAttachment::getArticleId, articleId)
+                .isNotNull(TicketAttachment::getFileId)
+                .orderByAsc(TicketAttachment::getId));
+        List<Long> fileIds = attachments.stream()
+                .map(TicketAttachment::getFileId)
+                .distinct()
+                .toList();
+        if (fileIds.isEmpty()) {
+            return List.of();
+        }
+        return sysFileMapper.selectBatchIds(fileIds);
     }
 
     private KnowledgeArticle requireArticle(Long id) {

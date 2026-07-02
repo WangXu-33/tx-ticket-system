@@ -18,32 +18,11 @@
 
         <img v-else-if="previewType === 'image'" :src="previewUrl" class="image-preview" />
 
-        <vue-office-pdf
+        <iframe
           v-else-if="previewType === 'pdf'"
           :src="previewUrl"
           class="office-preview"
-          @error="handleRenderError"
-        />
-
-        <vue-office-docx
-          v-else-if="previewType === 'docx'"
-          :src="officeSource"
-          class="office-preview"
-          @error="handleRenderError"
-        />
-
-        <vue-office-excel
-          v-else-if="previewType === 'excel'"
-          :src="officeSource"
-          class="office-preview"
-          @error="handleRenderError"
-        />
-
-        <vue-office-pptx
-          v-else-if="previewType === 'pptx'"
-          :src="officeSource"
-          class="office-preview"
-          @error="handleRenderError"
+          title="PDF 文件预览"
         />
 
         <div v-else class="preview-empty">
@@ -57,16 +36,9 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, ref, watch, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { FileUnknownOutlined } from '@ant-design/icons-vue'
-import '@vue-office/docx/lib/index.css'
-import '@vue-office/excel/lib/index.css'
 import { getPreviewBlob } from '@/utils/file-preview'
-
-const VueOfficeDocx = defineAsyncComponent(() => import('@vue-office/docx'))
-const VueOfficeExcel = defineAsyncComponent(() => import('@vue-office/excel'))
-const VueOfficePdf = defineAsyncComponent(() => import('@vue-office/pdf'))
-const VueOfficePptx = defineAsyncComponent(() => import('@vue-office/pptx'))
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -77,7 +49,6 @@ const emit = defineEmits(['update:open', 'download'])
 
 const loading = ref(false)
 const previewUrl = ref('')
-const officeSource = ref(null)
 const errorMessage = ref('')
 
 const suffix = computed(() => (props.record?.fileSuffix || '').toLowerCase())
@@ -87,9 +58,6 @@ const previewType = computed(() => {
   const ext = suffix.value
   if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp'].includes(ext)) return 'image'
   if (ext === '.pdf') return 'pdf'
-  if (ext === '.docx') return 'docx'
-  if (['.xlsx', '.xls'].includes(ext)) return 'excel'
-  if (ext === '.pptx') return 'pptx'
   return 'unsupported'
 })
 
@@ -98,16 +66,12 @@ const clearPreview = () => {
     URL.revokeObjectURL(previewUrl.value)
   }
   previewUrl.value = ''
-  officeSource.value = null
   errorMessage.value = ''
 }
 
 const loadPreview = async () => {
   clearPreview()
-  if (!props.open || !props.record?.id) {
-    return
-  }
-  if (previewType.value === 'unsupported') {
+  if (!props.open || !props.record?.id || previewType.value === 'unsupported') {
     return
   }
 
@@ -118,20 +82,12 @@ const loadPreview = async () => {
       errorMessage.value = '文件预览数据为空'
       return
     }
-    if (previewType.value === 'image' || previewType.value === 'pdf') {
-      previewUrl.value = URL.createObjectURL(blob)
-    } else {
-      officeSource.value = await blob.arrayBuffer()
-    }
+    previewUrl.value = URL.createObjectURL(blob)
   } catch {
     errorMessage.value = '文件加载失败，请下载后查看'
   } finally {
     loading.value = false
   }
-}
-
-const handleRenderError = () => {
-  errorMessage.value = '文件渲染失败，请下载后查看'
 }
 
 const handleClose = () => {

@@ -60,13 +60,14 @@
               <a @click="goDetail(record.id)">详情</a>
               <a v-if="record.status === 'pending'" @click="receive(record.id)">接单</a>
               <a @click="openAssign(record)">分派</a>
+              <a @click="openTransfer(record)">转派</a>
             </a-space>
           </template>
         </template>
       </a-table>
     </a-card>
 
-    <a-modal v-model:open="assignVisible" title="分派/转派工单" @ok="submitAssign">
+    <a-modal v-model:open="assignVisible" :title="assignMode === 'transfer' ? '转派工单' : '分派工单'" @ok="submitAssign">
       <a-form layout="vertical" :model="assignForm">
         <a-form-item label="处理人用户 ID" required>
           <a-input-number v-model:value="assignForm.handlerId" style="width: 100%" />
@@ -89,6 +90,7 @@ const router = useRouter()
 const loading = ref(false)
 const dataSource = ref([])
 const assignVisible = ref(false)
+const assignMode = ref('assign')
 const currentTicket = ref(null)
 const query = reactive({ keyword: '', status: undefined, priority: undefined, pageNum: 1, pageSize: 10 })
 const assignForm = reactive({ handlerId: null, reason: '' })
@@ -150,14 +152,24 @@ const receive = async (id) => {
 
 const openAssign = (record) => {
   currentTicket.value = record
+  assignMode.value = 'assign'
   assignForm.handlerId = record.handlerId || null
   assignForm.reason = ''
   assignVisible.value = true
 }
 
+const openTransfer = (record) => {
+  currentTicket.value = record
+  assignMode.value = 'transfer'
+  assignForm.handlerId = null
+  assignForm.reason = ''
+  assignVisible.value = true
+}
+
 const submitAssign = async () => {
-  await request.post('/ticket/assign', { ticketId: currentTicket.value.id, handlerId: assignForm.handlerId, reason: assignForm.reason })
-  message.success('分派成功')
+  const endpoint = assignMode.value === 'transfer' ? '/ticket/transfer' : '/ticket/assign'
+  await request.post(endpoint, { ticketId: currentTicket.value.id, handlerId: assignForm.handlerId, reason: assignForm.reason })
+  message.success(assignMode.value === 'transfer' ? '转派成功' : '分派成功')
   assignVisible.value = false
   fetchData()
 }

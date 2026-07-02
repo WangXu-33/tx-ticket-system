@@ -39,19 +39,42 @@
         <a-form-item label="来源工单 ID">
           <a-input-number v-model:value="form.sourceTicketId" style="width: 100%" />
         </a-form-item>
+        <a-form-item label="关联工单 ID">
+          <a-input v-model:value="linkedTicketText" placeholder="多个工单 ID 用英文逗号分隔，例如 12,18,21" />
+        </a-form-item>
+        <a-form-item label="附件">
+          <a-upload :showUploadList="false" :customRequest="uploadKnowledgeFile">
+            <a-button>上传附件</a-button>
+          </a-upload>
+          <a-list v-if="files.length" size="small" :data-source="files" class="file-list">
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <a-space>
+                  <a :href="buildFilePreviewUrl(item.id)" target="_blank">{{ item.fileName }}</a>
+                  <span class="muted">{{ formatFileSize(item.fileSize) }}</span>
+                  <a :href="buildFileDownloadUrl(item.id)" target="_blank">下载</a>
+                </a-space>
+              </a-list-item>
+            </template>
+          </a-list>
+        </a-form-item>
       </a-form>
     </a-card>
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import request from '@/api/request'
+import { buildFileDownloadUrl, buildFilePreviewUrl } from '@/utils/file'
+import { createUploadRequest, formatFileSize } from '@/utils/upload'
 
 const route = useRoute()
 const router = useRouter()
+const files = ref([])
+const linkedTicketText = ref('')
 const form = reactive({
   id: null,
   title: '',
@@ -70,13 +93,46 @@ const fetchDetail = async () => {
   if (!route.params.id) return
   const res = await request.get(`/knowledge/detail/${route.params.id}`)
   Object.assign(form, res.data.article)
+  files.value = res.data.files || []
+  linkedTicketText.value = (res.data.links || []).map(item => item.ticketId).join(',')
 }
 
 const save = async () => {
-  await request.post('/knowledge/save', form)
+  const payload = {
+    ...form,
+    linkedTicketIds: parseLinkedTicketIds()
+  }
+  await request.post('/knowledge/save', payload)
   message.success('知识库已保存')
   router.push('/ticket/knowledge')
 }
 
+const parseLinkedTicketIds = () => {
+  const ids = linkedTicketText.value
+    .split(',')
+    .map(item => Number(item.trim()))
+    .filter(item => Number.isFinite(item) && item > 0)
+  if (form.sourceTicketId && !ids.includes(form.sourceTicketId)) {
+    ids.push(form.sourceTicketId)
+  }
+  return ids
+}
+
+const uploadKnowledgeFile = createUploadRequest((file) => {
+  form.fileIds.push(file.id)
+  files.value.push(file)
+  message.success('附件上传成功')
+})
+
 onMounted(fetchDetail)
 </script>
+
+<style scoped>
+.file-list {
+  margin-top: 10px;
+}
+
+.muted {
+  color: #64748b;
+}
+</style>

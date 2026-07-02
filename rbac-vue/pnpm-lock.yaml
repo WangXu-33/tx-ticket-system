@@ -11,18 +11,6 @@ importers:
       '@ant-design/icons-vue':
         specifier: ^7.0.1
         version: 7.0.1(vue@3.5.33)
-      '@vue-office/docx':
-        specifier: ^1.6.3
-        version: 1.6.3(vue-demi@0.14.10(vue@3.5.33))(vue@3.5.33)
-      '@vue-office/excel':
-        specifier: ^1.7.14
-        version: 1.7.14(vue-demi@0.14.10(vue@3.5.33))(vue@3.5.33)
-      '@vue-office/pdf':
-        specifier: ^2.0.10
-        version: 2.0.10(vue-demi@0.14.10(vue@3.5.33))(vue@3.5.33)
-      '@vue-office/pptx':
-        specifier: ^1.0.1
-        version: 1.0.1(vue-demi@0.14.10(vue@3.5.33))(vue@3.5.33)
       ant-design-vue:
         specifier: ^4.2.1
         version: 4.2.6(vue@3.5.33)
@@ -390,46 +378,6 @@ packages:
     peerDependencies:
       vite: ^5.0.0 || ^6.0.0
       vue: ^3.2.25
-
-  '@vue-office/docx@1.6.3':
-    resolution: {integrity: sha512-Cs+3CAaRBOWOiW4XAhTwwxJ0dy8cPIf6DqfNvYcD3YACiLwO4kuawLF2IAXxyijhbuOeoFsfvoVbOc16A/4bZA==}
-    peerDependencies:
-      '@vue/composition-api': ^1.7.1
-      vue: ^2.0.0 || >=3.0.0
-      vue-demi: ^0.14.6
-    peerDependenciesMeta:
-      '@vue/composition-api':
-        optional: true
-
-  '@vue-office/excel@1.7.14':
-    resolution: {integrity: sha512-pVUgt+emDQUnW7q22CfnQ+jl43mM/7IFwYzOg7lwOwPEbiVB4K4qEQf+y/bc4xGXz75w1/e3Kz3G6wAafmFBFg==}
-    peerDependencies:
-      '@vue/composition-api': ^1.7.1
-      vue: ^2.0.0 || >=3.0.0
-      vue-demi: ^0.14.6
-    peerDependenciesMeta:
-      '@vue/composition-api':
-        optional: true
-
-  '@vue-office/pdf@2.0.10':
-    resolution: {integrity: sha512-yHVLrMAKpMPBkhBwofFyGEtEeJF0Zd7oGmf56Pe5aj/xObdRq3E1CIZqTqhWJNgHV8oLQqaX0vs4p5T1zq+GIA==}
-    peerDependencies:
-      '@vue/composition-api': ^1.7.1
-      vue: ^2.0.0 || >=3.0.0
-      vue-demi: ^0.14.6
-    peerDependenciesMeta:
-      '@vue/composition-api':
-        optional: true
-
-  '@vue-office/pptx@1.0.1':
-    resolution: {integrity: sha512-+V7Kctzl6f6+Yk4NaD/wQGRIkqLWcowe0jEhPexWQb8Oilbzt1OyhWRWcMsxNDTdrgm6aMLP+0/tmw27cxddMg==}
-    peerDependencies:
-      '@vue/composition-api': ^1.7.1
-      vue: ^2.0.0 || >=3.0.0
-      vue-demi: ^0.14.6
-    peerDependenciesMeta:
-      '@vue/composition-api':
-        optional: true
 
   '@vue/compiler-core@3.5.33':
     resolution: {integrity: sha512-3PZLQwFw4Za3TC8t0FvTy3wI16Kt+pmwcgNZca4Pj9iWL2E72a/gZlpBtAJvEdDMdCxdG/qq0C7PN0bsJuv0Rw==}
@@ -938,26 +886,6 @@ snapshots:
     dependencies:
       vite: 5.4.21
       vue: 3.5.33
-
-  '@vue-office/docx@1.6.3(vue-demi@0.14.10(vue@3.5.33))(vue@3.5.33)':
-    dependencies:
-      vue: 3.5.33
-      vue-demi: 0.14.10(vue@3.5.33)
-
-  '@vue-office/excel@1.7.14(vue-demi@0.14.10(vue@3.5.33))(vue@3.5.33)':
-    dependencies:
-      vue: 3.5.33
-      vue-demi: 0.14.10(vue@3.5.33)
-
-  '@vue-office/pdf@2.0.10(vue-demi@0.14.10(vue@3.5.33))(vue@3.5.33)':
-    dependencies:
-      vue: 3.5.33
-      vue-demi: 0.14.10(vue@3.5.33)
-
-  '@vue-office/pptx@1.0.1(vue-demi@0.14.10(vue@3.5.33))(vue@3.5.33)':
-    dependencies:
-      vue: 3.5.33
-      vue-demi: 0.14.10(vue@3.5.33)
 
   '@vue/compiler-core@3.5.33':
     dependencies:
