@@ -45,6 +45,12 @@ public class TicketController {
         return Result.success(ticketService.detail(id));
     }
 
+    @GetMapping("/handler-options")
+    @SaCheckPermission(value = {"ticket:assign", "ticket:transfer"}, mode = SaMode.OR)
+    public Result<?> handlerOptions(@RequestParam(required = false) String keyword) {
+        return Result.success(ticketService.handlerOptions(keyword));
+    }
+
     @PostMapping("/create")
     @SaCheckPermission(value = {"ticket:add", "ticket:my:add"}, mode = SaMode.OR)
     @Log(title = "工单管理", businessType = 1)

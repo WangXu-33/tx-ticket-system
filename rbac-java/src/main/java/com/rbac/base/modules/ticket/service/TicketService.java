@@ -17,12 +17,14 @@ import com.rbac.base.modules.ticket.entity.TicketFlow;
 import com.rbac.base.modules.ticket.mapper.TicketAttachmentMapper;
 import com.rbac.base.modules.ticket.mapper.TicketFlowMapper;
 import com.rbac.base.modules.ticket.mapper.TicketMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,17 +53,20 @@ public class TicketService {
     private final TicketAttachmentMapper ticketAttachmentMapper;
     private final SysUserMapper userMapper;
     private final SysFileMapper sysFileMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     public TicketService(TicketMapper ticketMapper,
                          TicketFlowMapper ticketFlowMapper,
                          TicketAttachmentMapper ticketAttachmentMapper,
                          SysUserMapper userMapper,
-                         SysFileMapper sysFileMapper) {
+                         SysFileMapper sysFileMapper,
+                         JdbcTemplate jdbcTemplate) {
         this.ticketMapper = ticketMapper;
         this.ticketFlowMapper = ticketFlowMapper;
         this.ticketAttachmentMapper = ticketAttachmentMapper;
         this.userMapper = userMapper;
         this.sysFileMapper = sysFileMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -120,21 +125,60 @@ public class TicketService {
     public Map<String, Object> detail(Long id) {
         Ticket ticket = requireTicket(id);
         assertTicketVisible(ticket);
+        boolean customerOnly = isCustomerOnly();
         Map<String, Object> data = new HashMap<>();
-        data.put("ticket", ticket);
-        data.put("flows", ticketFlowMapper.selectList(new LambdaQueryWrapper<TicketFlow>()
+        LambdaQueryWrapper<TicketFlow> flowWrapper = new LambdaQueryWrapper<TicketFlow>()
                 .eq(TicketFlow::getTicketId, id)
-                .orderByAsc(TicketFlow::getId)));
-        data.put("attachments", ticketAttachmentMapper.selectList(new LambdaQueryWrapper<TicketAttachment>()
+                .orderByAsc(TicketFlow::getId);
+        LambdaQueryWrapper<TicketAttachment> attachmentWrapper = new LambdaQueryWrapper<TicketAttachment>()
                 .eq(TicketAttachment::getTicketId, id)
-                .orderByAsc(TicketAttachment::getId)));
-        data.put("files", listTicketFiles(id));
+                .orderByAsc(TicketAttachment::getId);
+        if (customerOnly) {
+            flowWrapper.eq(TicketFlow::getVisibleScope, SCOPE_PUBLIC);
+            attachmentWrapper.eq(TicketAttachment::getVisibleScope, SCOPE_PUBLIC);
+        }
+
+        List<TicketAttachment> attachments = ticketAttachmentMapper.selectList(attachmentWrapper);
+        data.put("ticket", ticket);
+        data.put("flows", ticketFlowMapper.selectList(flowWrapper));
+        data.put("attachments", attachments);
+        data.put("files", listTicketFiles(attachments));
         return data;
+    }
+
+    /**
+     * 代码修改时间：2026-07-02。
+     * 功能说明：查询可被分派或转派工单的处理人候选列表。
+     * 入参：keyword 可选，按账号或昵称模糊匹配。
+     * 出参：包含用户 ID、账号、昵称和角色信息的列表。
+     * 异常场景：数据库查询异常时由全局异常处理返回。
+     */
+    public List<Map<String, Object>> handlerOptions(String keyword) {
+        String likeKeyword = "%" + defaultText(keyword, "") + "%";
+        return jdbcTemplate.queryForList("""
+                SELECT DISTINCT
+                    u.id,
+                    u.username,
+                    u.nickname,
+                    r.role_name AS roleName,
+                    r.role_key AS roleKey
+                FROM sys_user u
+                JOIN sys_user_role ur ON u.id = ur.user_id
+                JOIN sys_role r ON ur.role_id = r.id
+                WHERE u.status = 1
+                  AND u.del_flag = 0
+                  AND r.del_flag = 0
+                  AND r.status = 1
+                  AND r.role_key IN ('admin','system_admin','operator','support','expert','supervisor')
+                  AND (? = '%%' OR u.username LIKE ? OR u.nickname LIKE ?)
+                ORDER BY u.id ASC
+                """, likeKeyword, likeKeyword, likeKeyword);
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void receive(Long id) {
         Ticket ticket = requireTicket(id);
+        assertStatusIn(ticket, "接单", STATUS_PENDING);
         SysUser operator = currentUser();
         String fromStatus = ticket.getStatus();
         ticket.setStatus(STATUS_PROCESSING);
@@ -150,13 +194,14 @@ public class TicketService {
         validateText(dto.getContent(), "回复内容不能为空");
         Ticket ticket = requireTicket(dto.getTicketId());
         assertTicketVisible(ticket);
+        assertNotTerminal(ticket, "回复");
         String fromStatus = ticket.getStatus();
-        String targetStatus = StringUtils.hasText(dto.getTargetStatus()) ? dto.getTargetStatus() : fromStatus;
+        String targetStatus = resolveReplyTargetStatus(dto, fromStatus);
         if (!fromStatus.equals(targetStatus)) {
             ticket.setStatus(targetStatus);
             ticketMapper.updateById(ticket);
         }
-        String scope = StringUtils.hasText(dto.getVisibleScope()) ? dto.getVisibleScope() : SCOPE_PUBLIC;
+        String scope = resolveReplyScope(dto);
         TicketFlow flow = insertFlow(ticket, "replied", fromStatus, targetStatus, ticket.getHandlerId(),
                 ticket.getHandlerId(), dto.getContent(), scope);
         linkFiles(ticket.getId(), flow.getId(), null, dto.getFileIds(), scope, "flow");
@@ -176,6 +221,7 @@ public class TicketService {
     public void resolve(TicketResolveDTO dto) {
         validateText(dto.getSolution(), "解决方案不能为空");
         Ticket ticket = requireTicket(dto.getTicketId());
+        assertStatusIn(ticket, "解决", STATUS_PROCESSING, STATUS_WAITING_CUSTOMER, STATUS_TRANSFERRED);
         String fromStatus = ticket.getStatus();
         ticket.setStatus(STATUS_RESOLVED);
         ticket.setSolution(dto.getSolution().trim());
@@ -190,6 +236,7 @@ public class TicketService {
     public void close(Long id) {
         Ticket ticket = requireTicket(id);
         assertTicketVisible(ticket);
+        assertStatusIn(ticket, "关闭", STATUS_RESOLVED);
         String fromStatus = ticket.getStatus();
         ticket.setStatus(STATUS_CLOSED);
         ticket.setClosedTime(LocalDateTime.now());
@@ -202,6 +249,7 @@ public class TicketService {
     public void reject(TicketReplyDTO dto) {
         validateText(dto.getContent(), "驳回原因不能为空");
         Ticket ticket = requireTicket(dto.getTicketId());
+        assertStatusIn(ticket, "驳回", STATUS_PENDING, STATUS_PROCESSING, STATUS_WAITING_CUSTOMER, STATUS_TRANSFERRED);
         String fromStatus = ticket.getStatus();
         ticket.setStatus(STATUS_REJECTED);
         ticketMapper.updateById(ticket);
@@ -214,9 +262,13 @@ public class TicketService {
             throw new IllegalArgumentException("处理人不能为空");
         }
         Ticket ticket = requireTicket(dto.getTicketId());
+        assertHandlerChangeAllowed(ticket, action);
         SysUser handler = userMapper.selectById(dto.getHandlerId());
         if (handler == null) {
             throw new IllegalArgumentException("处理人不存在");
+        }
+        if (!isValidHandler(handler.getId())) {
+            throw new IllegalArgumentException("处理人必须是启用状态的运维、专家、主管或管理员账号");
         }
         String fromStatus = ticket.getStatus();
         Long fromHandlerId = ticket.getHandlerId();
@@ -271,19 +323,82 @@ public class TicketService {
         }
     }
 
-    private List<SysFile> listTicketFiles(Long ticketId) {
-        List<TicketAttachment> attachments = ticketAttachmentMapper.selectList(new LambdaQueryWrapper<TicketAttachment>()
-                .eq(TicketAttachment::getTicketId, ticketId)
-                .isNotNull(TicketAttachment::getFileId)
-                .orderByAsc(TicketAttachment::getId));
+    private List<SysFile> listTicketFiles(List<TicketAttachment> attachments) {
         List<Long> fileIds = attachments.stream()
                 .map(TicketAttachment::getFileId)
+                .filter(fileId -> fileId != null)
                 .distinct()
                 .toList();
         if (fileIds.isEmpty()) {
             return List.of();
         }
         return sysFileMapper.selectBatchIds(fileIds);
+    }
+
+    /**
+     * 代码修改时间：2026-07-02。
+     * 功能说明：按当前登录角色解析回复后的目标状态，避免客户绕过前端修改工单状态。
+     * 入参：回复 DTO、当前状态。
+     * 出参：服务端确认后的目标状态。
+     * 异常场景：目标状态不在允许范围时抛出 IllegalArgumentException。
+     */
+    private String resolveReplyTargetStatus(TicketReplyDTO dto, String fromStatus) {
+        if (isCustomerOnly()) {
+            return STATUS_WAITING_CUSTOMER.equals(fromStatus) ? STATUS_PROCESSING : fromStatus;
+        }
+        if (!StringUtils.hasText(dto.getTargetStatus())) {
+            return fromStatus;
+        }
+        String targetStatus = dto.getTargetStatus().trim();
+        boolean allowed = List.of(STATUS_PROCESSING, STATUS_WAITING_CUSTOMER).contains(targetStatus);
+        if (!allowed) {
+            throw new IllegalArgumentException("回复只能切换为处理中或待客户补充");
+        }
+        return targetStatus;
+    }
+
+    private String resolveReplyScope(TicketReplyDTO dto) {
+        if (isCustomerOnly()) {
+            return SCOPE_PUBLIC;
+        }
+        return SCOPE_INTERNAL.equals(dto.getVisibleScope()) ? SCOPE_INTERNAL : SCOPE_PUBLIC;
+    }
+
+    private void assertHandlerChangeAllowed(Ticket ticket, String action) {
+        if ("assigned".equals(action)) {
+            assertStatusIn(ticket, "分派", STATUS_PENDING, STATUS_PROCESSING, STATUS_WAITING_CUSTOMER, STATUS_TRANSFERRED);
+            return;
+        }
+        assertStatusIn(ticket, "转派", STATUS_PROCESSING, STATUS_WAITING_CUSTOMER, STATUS_TRANSFERRED);
+    }
+
+    private void assertStatusIn(Ticket ticket, String actionName, String... allowedStatuses) {
+        boolean allowed = Arrays.asList(allowedStatuses).contains(ticket.getStatus());
+        if (!allowed) {
+            throw new IllegalArgumentException("当前状态不允许" + actionName);
+        }
+    }
+
+    private void assertNotTerminal(Ticket ticket, String actionName) {
+        if (STATUS_CLOSED.equals(ticket.getStatus()) || STATUS_REJECTED.equals(ticket.getStatus())) {
+            throw new IllegalArgumentException("已结束工单不允许" + actionName);
+        }
+    }
+
+    private boolean isValidHandler(Long userId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(1)
+                FROM sys_user u
+                JOIN sys_user_role ur ON u.id = ur.user_id
+                JOIN sys_role r ON ur.role_id = r.id
+                WHERE u.id = ?
+                  AND u.status = 1
+                  AND u.del_flag = 0
+                  AND r.del_flag = 0
+                  AND r.status = 1
+                  AND r.role_key IN ('admin','system_admin','operator','support','expert','supervisor')
+                """, Integer.class, userId);
+        return count != null && count > 0;
     }
 
     private Ticket requireTicket(Long id) {
@@ -314,7 +429,7 @@ public class TicketService {
 
     private boolean isCustomerOnly() {
         List<String> roles = StpUtil.getRoleList();
-        return roles.contains("customer") && !roles.contains("admin") && !roles.contains("support")
+        return roles.contains("customer") && !roles.contains("admin") && !roles.contains("system_admin") && !roles.contains("support")
                 && !roles.contains("operator") && !roles.contains("expert") && !roles.contains("supervisor");
     }
 

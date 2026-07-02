@@ -56,6 +56,30 @@
                   </a-form-item>
                 </a-col>
               </a-row>
+              <a-row :gutter="32">
+                <a-col :span="10">
+                  <a-form-item label="附件最大上传大小（MB）">
+                    <a-input-number v-model:value="configForm['file.security.max-size-mb']" :min="1" :max="1024" style="width: 100%" size="large" />
+                    <div class="tip-text">工单、知识库和系统文件上传共用该限制。</div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="32">
+                <a-col :span="20">
+                  <a-form-item label="允许上传后缀">
+                    <a-textarea v-model:value="configForm['file.security.allowed-suffixes']" :rows="3" placeholder=".jpg,.png,.pdf,.docx,.xlsx,.zip" />
+                    <div class="tip-text">英文逗号分隔；留空表示只按禁止后缀拦截。</div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="32">
+                <a-col :span="20">
+                  <a-form-item label="禁止上传后缀">
+                    <a-textarea v-model:value="configForm['file.security.blocked-suffixes']" :rows="3" placeholder=".exe,.bat,.cmd,.sh,.ps1,.jar" />
+                    <div class="tip-text">该配置优先级高于允许后缀，用于拦截脚本、可执行文件和高风险包。</div>
+                  </a-form-item>
+                </a-col>
+              </a-row>
             </div>
 
             <!-- 阿里云 OSS 配置 -->
@@ -191,6 +215,9 @@ const configForm = reactive({
   'system.storage.active': 'localStorageService',
   'local.storage.path': '',
   'local.storage.domain': '',
+  'file.security.max-size-mb': '20',
+  'file.security.allowed-suffixes': '.jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar',
+  'file.security.blocked-suffixes': '.exe,.bat,.cmd,.sh,.ps1,.jar,.war,.msi,.dll,.com,.scr',
   'aliyun.oss.endpoint': '',
   'aliyun.oss.bucketName': '',
   'aliyun.oss.accessKeyId': '',
@@ -244,7 +271,8 @@ const setActiveEngine = () => {
 const submitConfig = async () => {
   submittingConfig.value = true
   try {
-    await request.post('/system/config/saveOssConfig', configForm)
+    const payload = Object.fromEntries(Object.entries(configForm).map(([key, value]) => [key, value == null ? '' : String(value)]))
+    await request.post('/system/config/saveOssConfig', payload)
     message.success('配置已保存并实时生效')
   } finally {
     submittingConfig.value = false

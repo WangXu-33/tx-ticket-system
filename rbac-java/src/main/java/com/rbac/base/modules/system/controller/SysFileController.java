@@ -185,6 +185,8 @@ public class SysFileController {
         try {
             SysFile sysFile = sysFileService.uploadAndSave(file);
             return Result.success(sysFile);
+        } catch (IllegalArgumentException e) {
+            return Result.error(e.getMessage());
         } catch (IOException e) {
             e.printStackTrace();
             return Result.error("文件上传失败: " + e.getMessage());

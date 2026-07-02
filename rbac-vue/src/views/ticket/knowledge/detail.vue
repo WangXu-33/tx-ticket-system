@@ -67,7 +67,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import request from '@/api/request'
+import { knowledgeApi } from '@/api/ticket'
 import { buildFileDownloadUrl, buildFilePreviewUrl } from '@/utils/file'
 import { createUploadRequest, formatFileSize } from '@/utils/upload'
 
@@ -91,7 +91,7 @@ const form = reactive({
 
 const fetchDetail = async () => {
   if (!route.params.id) return
-  const res = await request.get(`/knowledge/detail/${route.params.id}`)
+  const res = await knowledgeApi.detail(route.params.id)
   Object.assign(form, res.data.article)
   files.value = res.data.files || []
   linkedTicketText.value = (res.data.links || []).map(item => item.ticketId).join(',')
@@ -102,7 +102,7 @@ const save = async () => {
     ...form,
     linkedTicketIds: parseLinkedTicketIds()
   }
-  await request.post('/knowledge/save', payload)
+  await knowledgeApi.save(payload)
   message.success('知识库已保存')
   router.push('/ticket/knowledge')
 }

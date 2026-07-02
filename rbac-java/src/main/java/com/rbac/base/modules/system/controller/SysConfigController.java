@@ -22,7 +22,11 @@ public class SysConfigController {
         Map<String, String> configs = configService.getConfigsByPrefix("aliyun.oss");
         configs.putAll(configService.getConfigsByPrefix("minio"));
         configs.putAll(configService.getConfigsByPrefix("local.storage"));
+        configs.putAll(configService.getConfigsByPrefix("file.security"));
         configs.put("system.storage.active", configService.getConfigValue("system.storage.active"));
+        configs.putIfAbsent("file.security.max-size-mb", "20");
+        configs.putIfAbsent("file.security.allowed-suffixes", ".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar");
+        configs.putIfAbsent("file.security.blocked-suffixes", ".exe,.bat,.cmd,.sh,.ps1,.jar,.war,.msi,.dll,.com,.scr");
 
         // Mask sensitive data
         if (configs.containsKey("aliyun.oss.accessKeySecret") && !configs.get("aliyun.oss.accessKeySecret").isEmpty()) {

@@ -21,10 +21,7 @@
         </a-form-item>
         <a-form-item label="优先级">
           <a-select v-model:value="query.priority" allow-clear style="width: 140px">
-            <a-select-option value="low">低</a-select-option>
-            <a-select-option value="normal">普通</a-select-option>
-            <a-select-option value="high">高</a-select-option>
-            <a-select-option value="urgent">紧急</a-select-option>
+            <a-select-option v-for="item in priorityOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item>
@@ -69,8 +66,20 @@
 
     <a-modal v-model:open="assignVisible" :title="assignMode === 'transfer' ? '转派工单' : '分派工单'" @ok="submitAssign">
       <a-form layout="vertical" :model="assignForm">
-        <a-form-item label="处理人用户 ID" required>
-          <a-input-number v-model:value="assignForm.handlerId" style="width: 100%" />
+        <a-form-item label="处理人" required>
+          <a-select
+            v-model:value="assignForm.handlerId"
+            show-search
+            allow-clear
+            style="width: 100%"
+            placeholder="请选择运维、专家、主管或管理员"
+            :filter-option="filterHandlerOption"
+            @search="fetchHandlerOptions"
+          >
+            <a-select-option v-for="item in handlerOptions" :key="item.id" :value="item.id">
+              {{ item.nickname || item.username }}（{{ item.roleName || item.roleKey }}）
+            </a-select-option>
+          </a-select>
         </a-form-item>
         <a-form-item label="原因">
           <a-textarea v-model:value="assignForm.reason" :rows="4" placeholder="说明分派或转派原因" />
@@ -84,11 +93,20 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import request from '@/api/request'
+import { ticketApi } from '@/api/ticket'
+import {
+  TICKET_PRIORITY_OPTIONS,
+  TICKET_STATUS_OPTIONS,
+  ticketPriorityColor,
+  ticketPriorityText,
+  ticketStatusColor,
+  ticketStatusText
+} from '@/constants/ticket'
 
 const router = useRouter()
 const loading = ref(false)
 const dataSource = ref([])
+const handlerOptions = ref([])
 const assignVisible = ref(false)
 const assignMode = ref('assign')
 const currentTicket = ref(null)
@@ -96,15 +114,8 @@ const query = reactive({ keyword: '', status: undefined, priority: undefined, pa
 const assignForm = reactive({ handlerId: null, reason: '' })
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showSizeChanger: true })
 
-const statusOptions = [
-  { value: 'pending', label: '待受理' },
-  { value: 'processing', label: '处理中' },
-  { value: 'waiting_customer', label: '待客户补充' },
-  { value: 'transferred', label: '已转派' },
-  { value: 'resolved', label: '已解决' },
-  { value: 'closed', label: '已关闭' },
-  { value: 'rejected', label: '已驳回' }
-]
+const statusOptions = TICKET_STATUS_OPTIONS
+const priorityOptions = TICKET_PRIORITY_OPTIONS
 
 const columns = [
   { title: '工单编号', dataIndex: 'ticketNo', key: 'ticketNo', width: 180 },
@@ -120,7 +131,7 @@ const columns = [
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await request.get('/ticket/list', { params: query })
+    const res = await ticketApi.list(query)
     dataSource.value = res.data.records || []
     pagination.total = res.data.total || 0
     pagination.current = res.data.current || query.pageNum
@@ -144,8 +155,19 @@ const resetQuery = () => {
   fetchData()
 }
 
+const fetchHandlerOptions = async (keyword = '') => {
+  const res = await ticketApi.handlerOptions({ keyword })
+  handlerOptions.value = res.data || []
+}
+
+const filterHandlerOption = (input, option) => {
+  const record = handlerOptions.value.find(item => item.id === option.value)
+  const label = `${record?.username || ''}${record?.nickname || ''}${record?.roleName || ''}${record?.roleKey || ''}`
+  return label.toLowerCase().includes(input.toLowerCase())
+}
+
 const receive = async (id) => {
-  await request.post(`/ticket/receive/${id}`)
+  await ticketApi.receive(id)
   message.success('接单成功')
   fetchData()
 }
@@ -167,20 +189,27 @@ const openTransfer = (record) => {
 }
 
 const submitAssign = async () => {
-  const endpoint = assignMode.value === 'transfer' ? '/ticket/transfer' : '/ticket/assign'
-  await request.post(endpoint, { ticketId: currentTicket.value.id, handlerId: assignForm.handlerId, reason: assignForm.reason })
+  if (!assignForm.handlerId) {
+    message.warning('请选择处理人')
+    return
+  }
+  const action = assignMode.value === 'transfer' ? ticketApi.transfer : ticketApi.assign
+  await action({ ticketId: currentTicket.value.id, handlerId: assignForm.handlerId, reason: assignForm.reason })
   message.success(assignMode.value === 'transfer' ? '转派成功' : '分派成功')
   assignVisible.value = false
   fetchData()
 }
 
 const goDetail = (id) => router.push(`/ticket/detail/${id}`)
-const statusText = (value) => statusOptions.find(item => item.value === value)?.label || value
-const statusColor = (value) => ({ pending: 'orange', processing: 'blue', waiting_customer: 'purple', transferred: 'cyan', resolved: 'green', closed: 'default', rejected: 'red' }[value] || 'default')
-const priorityText = (value) => ({ low: '低', normal: '普通', high: '高', urgent: '紧急' }[value] || value)
-const priorityColor = (value) => ({ low: 'default', normal: 'blue', high: 'orange', urgent: 'red' }[value] || 'default')
+const statusText = ticketStatusText
+const statusColor = ticketStatusColor
+const priorityText = ticketPriorityText
+const priorityColor = ticketPriorityColor
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchData()
+  fetchHandlerOptions()
+})
 </script>
 
 <style scoped>

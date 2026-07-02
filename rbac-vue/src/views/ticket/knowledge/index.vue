@@ -52,7 +52,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import request from '@/api/request'
+import { knowledgeApi } from '@/api/ticket'
 
 const router = useRouter()
 const loading = ref(false)
@@ -72,7 +72,7 @@ const columns = [
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await request.get('/knowledge/list', { params: query })
+    const res = await knowledgeApi.list(query)
     dataSource.value = res.data.records || []
     pagination.total = res.data.total || 0
   } finally {
@@ -87,13 +87,13 @@ const handleTableChange = (page) => {
 }
 
 const publish = async (id) => {
-  await request.post(`/knowledge/publish/${id}`)
+  await knowledgeApi.publish(id)
   message.success('已发布')
   fetchData()
 }
 
 const withdraw = async (id) => {
-  await request.post(`/knowledge/withdraw/${id}`)
+  await knowledgeApi.withdraw(id)
   message.success('已下架')
   fetchData()
 }

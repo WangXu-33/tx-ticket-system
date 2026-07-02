@@ -244,7 +244,10 @@ CREATE TABLE `sys_config` (
 INSERT INTO `sys_config` (config_name, config_key, config_value, config_type) VALUES 
 ('存储策略', 'system.storage.active', 'localStorageService', 'Y'),
 ('Local 存储路径', 'local.storage.path', 'E:/tx_ticket_upload/', 'Y'),
-('Local 访问前缀', 'local.storage.domain', '/tx_files/', 'Y')
+('Local 访问前缀', 'local.storage.domain', '/tx_files/', 'Y'),
+('附件最大上传大小MB', 'file.security.max-size-mb', '20', 'Y'),
+('附件允许后缀', 'file.security.allowed-suffixes', '.jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar', 'Y'),
+('附件禁止后缀', 'file.security.blocked-suffixes', '.exe,.bat,.cmd,.sh,.ps1,.jar,.war,.msi,.dll,.com,.scr', 'Y')
 ON DUPLICATE KEY UPDATE config_value=VALUES(config_value);
 
 INSERT INTO `sys_dept` (id, parent_id, dept_code, dept_name) VALUES

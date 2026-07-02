@@ -14,6 +14,9 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.List;
 
 @Service
 public class SysFileService {
@@ -28,6 +31,7 @@ public class SysFileService {
     private SysConfigService configService;
 
     public SysFile uploadAndSave(MultipartFile file) throws IOException {
+        validateUploadFile(file);
         StorageService storageService = getActiveStorageService();
         String fileUrl = storageService.upload(file);
 
@@ -78,6 +82,70 @@ public class SysFileService {
         String active = configService.getConfigValue("system.storage.active");
         String beanName = StringUtils.hasText(active) ? active : "localStorageService";
         return applicationContext.getBean(beanName, StorageService.class);
+    }
+
+    /**
+     * 代码修改时间：2026-07-02。
+     * 功能说明：根据系统配置校验上传附件大小、允许后缀和禁止后缀。
+     * 入参：MultipartFile 上传文件对象。
+     * 出参：无返回，校验通过后继续上传。
+     * 异常场景：文件超限或后缀不符合配置时抛出 IllegalArgumentException。
+     */
+    private void validateUploadFile(MultipartFile file) {
+        long maxSizeBytes = resolveMaxSizeBytes();
+        if (file.getSize() > maxSizeBytes) {
+            throw new IllegalArgumentException("文件大小不能超过 " + (maxSizeBytes / 1024 / 1024) + "MB");
+        }
+
+        String suffix = extractSuffix(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
+        List<String> blockedSuffixes = parseSuffixes(defaultConfig(
+                configService.getConfigValue("file.security.blocked-suffixes"),
+                ".exe,.bat,.cmd,.sh,.ps1,.jar,.war,.msi,.dll,.com,.scr"
+        ));
+        if (blockedSuffixes.contains(suffix)) {
+            throw new IllegalArgumentException("当前文件类型禁止上传");
+        }
+
+        List<String> allowedSuffixes = parseSuffixes(defaultConfig(
+                configService.getConfigValue("file.security.allowed-suffixes"),
+                ".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+        ));
+        if (!allowedSuffixes.isEmpty() && !allowedSuffixes.contains(suffix)) {
+            throw new IllegalArgumentException("当前文件类型不在允许上传范围内");
+        }
+    }
+
+    private long resolveMaxSizeBytes() {
+        String value = configService.getConfigValue("file.security.max-size-mb");
+        long maxSizeMb = 20L;
+        if (StringUtils.hasText(value)) {
+            try {
+                maxSizeMb = Long.parseLong(value.trim());
+            } catch (NumberFormatException ignored) {
+                maxSizeMb = 20L;
+            }
+        }
+        if (maxSizeMb <= 0) {
+            maxSizeMb = 20L;
+        }
+        return maxSizeMb * 1024 * 1024;
+    }
+
+    private List<String> parseSuffixes(String value) {
+        if (!StringUtils.hasText(value)) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .map(item -> item.startsWith(".") ? item : "." + item)
+                .map(item -> item.toLowerCase(Locale.ROOT))
+                .distinct()
+                .toList();
+    }
+
+    private String defaultConfig(String value, String defaultValue) {
+        return StringUtils.hasText(value) ? value : defaultValue;
     }
 
     private String extractSuffix(String fileName) {

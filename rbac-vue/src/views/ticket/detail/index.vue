@@ -8,8 +8,8 @@
           <a-space>
             <a-button @click="router.back()">返回</a-button>
           <a-button v-if="canEditKnowledge && ticket.solution" @click="draftKnowledge">沉淀知识库</a-button>
-            <a-button type="primary" @click="resolveVisible = true">标记解决</a-button>
-            <a-button @click="closeTicket">关闭</a-button>
+            <a-button v-if="canResolveTicket" type="primary" @click="resolveVisible = true">标记解决</a-button>
+            <a-button v-if="canCloseTicket" @click="closeTicket">关闭</a-button>
           </a-space>
       </template>
 
@@ -97,10 +97,16 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import request from '@/api/request'
+import { knowledgeApi, ticketApi } from '@/api/ticket'
 import { buildFileDownloadUrl, buildFilePreviewUrl } from '@/utils/file'
 import { createUploadRequest, formatFileSize } from '@/utils/upload'
 import { hasAnyPermission } from '@/utils/permission'
+import {
+  TICKET_STATUS,
+  isTicketTerminal,
+  ticketActionText,
+  ticketStatusText
+} from '@/constants/ticket'
 
 const route = useRoute()
 const router = useRouter()
@@ -113,9 +119,15 @@ const resolveVisible = ref(false)
 const replyForm = reactive({ ticketId: null, content: '', visibleScope: 'public', fileIds: [] })
 const resolveForm = reactive({ ticketId: null, solution: '', fileIds: [] })
 const canEditKnowledge = computed(() => hasAnyPermission(['knowledge:edit']))
+const canResolveTicket = computed(() => {
+  return hasAnyPermission(['ticket:resolve']) && ticket.value && !isTicketTerminal(ticket.value.status) && ticket.value.status !== TICKET_STATUS.RESOLVED
+})
+const canCloseTicket = computed(() => {
+  return hasAnyPermission(['ticket:close', 'ticket:my:close']) && ticket.value?.status === TICKET_STATUS.RESOLVED
+})
 
 const fetchDetail = async () => {
-  const res = await request.get(`/ticket/detail/${route.params.id}`)
+  const res = await ticketApi.detail(route.params.id)
   ticket.value = res.data.ticket
   flows.value = res.data.flows || []
   files.value = res.data.files || []
@@ -124,7 +136,7 @@ const fetchDetail = async () => {
 }
 
 const submitReply = async () => {
-  await request.post('/ticket/reply', replyForm)
+  await ticketApi.reply(replyForm)
   message.success('回复已保存')
   replyForm.content = ''
   replyForm.fileIds = []
@@ -133,7 +145,7 @@ const submitReply = async () => {
 }
 
 const submitResolve = async () => {
-  await request.post('/ticket/resolve', resolveForm)
+  await ticketApi.resolve(resolveForm)
   message.success('工单已标记解决')
   resolveVisible.value = false
   resolveForm.solution = ''
@@ -143,13 +155,13 @@ const submitResolve = async () => {
 }
 
 const closeTicket = async () => {
-  await request.post(`/ticket/close/${ticket.value.id}`)
+  await ticketApi.close(ticket.value.id)
   message.success('工单已关闭')
   fetchDetail()
 }
 
 const draftKnowledge = async () => {
-  const res = await request.post(`/knowledge/draft-from-ticket/${ticket.value.id}`)
+  const res = await knowledgeApi.draftFromTicket(ticket.value.id)
   message.success('知识库草稿已生成')
   router.push(`/ticket/knowledge/detail/${res.data}`)
 }
@@ -166,8 +178,8 @@ const uploadResolveFile = createUploadRequest((file) => {
   message.success('附件上传成功')
 })
 
-const statusText = (value) => ({ pending: '待受理', processing: '处理中', waiting_customer: '待客户补充', transferred: '已转派', resolved: '已解决', closed: '已关闭', rejected: '已驳回' }[value] || value)
-const actionText = (value) => ({ created: '创建工单', received: '接单', replied: '回复', assigned: '分派', transferred: '转派', resolved: '解决', closed: '关闭', rejected: '驳回' }[value] || value)
+const statusText = ticketStatusText
+const actionText = ticketActionText
 
 onMounted(fetchDetail)
 </script>

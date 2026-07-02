@@ -85,8 +85,9 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import request from '@/api/request'
+import { ticketApi } from '@/api/ticket'
 import { createUploadRequest, formatFileSize } from '@/utils/upload'
+import { ticketStatusText } from '@/constants/ticket'
 
 const router = useRouter()
 const loading = ref(false)
@@ -109,7 +110,7 @@ const columns = [
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await request.get('/ticket/list', { params: query })
+    const res = await ticketApi.list(query)
     dataSource.value = res.data.records || []
     pagination.total = res.data.total || 0
   } finally {
@@ -124,7 +125,7 @@ const handleTableChange = (page) => {
 }
 
 const submitTicket = async () => {
-  await request.post('/ticket/create', form)
+  await ticketApi.create(form)
   message.success('工单已提交')
   createVisible.value = false
   form.title = ''
@@ -141,7 +142,7 @@ const uploadCreateFile = createUploadRequest((file) => {
 })
 
 const goDetail = (id) => router.push(`/ticket/detail/${id}`)
-const statusText = (value) => ({ pending: '待受理', processing: '处理中', waiting_customer: '待客户补充', transferred: '已转派', resolved: '已解决', closed: '已关闭', rejected: '已驳回' }[value] || value)
+const statusText = ticketStatusText
 
 onMounted(fetchData)
 </script>
