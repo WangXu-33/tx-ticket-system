@@ -111,6 +111,7 @@ import { message } from 'ant-design-vue'
 import { useEcharts } from '@/utils/useEcharts'
 import { STATUS_COLORS } from '@/theme/palette'
 import { downloadByRequest } from '@/utils/download'
+import { formatDateTime } from '@/utils/datetime'
 
 const { initChart } = useEcharts()
 
@@ -140,7 +141,7 @@ const columns = [
   { title: '操作系统', dataIndex: 'os', key: 'os' },
   { title: '登录状态', dataIndex: 'status', key: 'status' },
   { title: '操作信息', dataIndex: 'msg', key: 'msg' },
-  { title: '登录时间', dataIndex: 'loginTime', key: 'loginTime' }
+  { title: '登录时间', dataIndex: 'loginTime', key: 'loginTime', customRender: ({ text }) => formatDateTime(text) }
 ]
 
 const onDateChange = (val) => {

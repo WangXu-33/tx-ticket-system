@@ -291,8 +291,8 @@ INSERT INTO `sys_config` (config_name, config_key, config_value, config_type) VA
 ('存储策略', 'system.storage.active', 'localStorageService', 'Y'),
 ('Local 存储路径', 'local.storage.path', 'E:/tx_ticket_upload/', 'Y'),
 ('Local 访问前缀', 'local.storage.domain', '/tx_files/', 'Y'),
-('附件最大上传大小MB', 'file.security.max-size-mb', '20', 'Y'),
-('附件允许后缀', 'file.security.allowed-suffixes', '.jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar', 'Y'),
+('附件最大上传大小MB', 'file.security.max-size-mb', '200', 'Y'),
+('附件允许后缀', 'file.security.allowed-suffixes', '.jpg,.jpeg,.png,.gif,.webp,.svg,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.log,.json,.xml,.csv,.zip,.rar,.mp4,.webm,.mov,.avi', 'Y'),
 ('附件禁止后缀', 'file.security.blocked-suffixes', '.exe,.bat,.cmd,.sh,.ps1,.jar,.war,.msi,.dll,.com,.scr', 'Y')
 ON DUPLICATE KEY UPDATE config_value=VALUES(config_value);
 
@@ -312,7 +312,8 @@ INSERT INTO `sys_role` (id, role_name, role_key, data_scope, status) VALUES
 (1, '超级管理员', 'admin', 1, 1),
 (2, '系统管理员', 'system_admin', 1, 1),
 (3, '业务操作员', 'operator', 4, 1),
-(4, '审计员', 'auditor', 1, 1);
+(4, '审计员', 'auditor', 1, 1),
+(6, '工单主管', 'supervisor', 4, 1);
 
 INSERT INTO `sys_user_role` VALUES
 (1, 1),
@@ -486,8 +487,9 @@ CREATE TABLE IF NOT EXISTS `tx_ticket` (
   `title` varchar(200) NOT NULL COMMENT '工单标题',
   `description` text NOT NULL COMMENT '问题描述',
   `category` varchar(50) DEFAULT 'general' COMMENT '工单分类',
+  `system_code` varchar(80) DEFAULT NULL COMMENT '所属系统编码',
   `priority` varchar(30) DEFAULT 'normal' COMMENT '优先级',
-  `status` varchar(40) DEFAULT 'pending' COMMENT '当前状态',
+  `status` varchar(40) DEFAULT 'pending_approval' COMMENT '当前状态',
   `creator_id` bigint NOT NULL COMMENT '创建人ID',
   `creator_name` varchar(100) DEFAULT NULL COMMENT '创建人名称',
   `creator_phone` varchar(30) DEFAULT NULL COMMENT '联系电话',
@@ -495,8 +497,15 @@ CREATE TABLE IF NOT EXISTS `tx_ticket` (
   `handler_id` bigint DEFAULT NULL COMMENT '当前处理人ID',
   `handler_name` varchar(100) DEFAULT NULL COMMENT '当前处理人名称',
   `solution` text DEFAULT NULL COMMENT '最终解决方案',
+  `merge_parent_id` bigint DEFAULT NULL COMMENT '合并后的主工单ID',
+  `merge_reason` varchar(500) DEFAULT NULL COMMENT '合并原因',
+  `reopen_count` int DEFAULT 0 COMMENT '重开次数',
+  `evaluation_score` int DEFAULT NULL COMMENT '客户评价分值 1-5',
+  `evaluation_content` varchar(500) DEFAULT NULL COMMENT '客户评价内容',
   `resolved_time` datetime DEFAULT NULL COMMENT '解决时间',
   `closed_time` datetime DEFAULT NULL COMMENT '关闭时间',
+  `evaluation_time` datetime DEFAULT NULL COMMENT '评价时间',
+  `sla_warn_time` datetime DEFAULT NULL COMMENT '最近 SLA 提醒时间',
   `create_by` bigint DEFAULT NULL,
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
   `update_by` bigint DEFAULT NULL,
@@ -506,8 +515,14 @@ CREATE TABLE IF NOT EXISTS `tx_ticket` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_tx_ticket_no` (`ticket_no`),
   KEY `idx_tx_ticket_status_priority` (`status`,`priority`),
+  KEY `idx_tx_ticket_category_status` (`category`,`status`,`priority`),
+  KEY `idx_tx_ticket_system_status` (`system_code`,`status`),
   KEY `idx_tx_ticket_creator_time` (`creator_id`,`create_time`),
-  KEY `idx_tx_ticket_handler_status` (`handler_id`,`status`)
+  KEY `idx_tx_ticket_handler_status` (`handler_id`,`status`),
+  KEY `idx_tx_ticket_merge_parent` (`merge_parent_id`),
+  KEY `idx_tx_ticket_creator_name` (`creator_name`),
+  KEY `idx_tx_ticket_handler_name` (`handler_name`),
+  KEY `idx_tx_ticket_title` (`title`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='头绪工单主表';
 
 CREATE TABLE IF NOT EXISTS `tx_ticket_flow` (
@@ -564,7 +579,7 @@ CREATE TABLE IF NOT EXISTS `tx_knowledge_article` (
   `cause_analysis` text DEFAULT NULL COMMENT '原因分析',
   `solution_steps` text NOT NULL COMMENT '解决步骤',
   `applicable_scope` text DEFAULT NULL COMMENT '适用范围',
-  `status` varchar(30) DEFAULT 'draft' COMMENT '状态 draft/published/withdrawn',
+  `status` varchar(30) DEFAULT 'draft' COMMENT '状态 draft/reviewing/rejected/published/withdrawn',
   `source_ticket_id` bigint DEFAULT NULL COMMENT '来源工单ID',
   `useful_count` int DEFAULT 0 COMMENT '有帮助次数',
   `useless_count` int DEFAULT 0 COMMENT '无帮助次数',
@@ -577,7 +592,8 @@ CREATE TABLE IF NOT EXISTS `tx_knowledge_article` (
   `del_flag` tinyint DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_tx_knowledge_status_category` (`status`,`category`),
-  KEY `idx_tx_knowledge_source_ticket` (`source_ticket_id`)
+  KEY `idx_tx_knowledge_source_ticket` (`source_ticket_id`),
+  KEY `idx_tx_knowledge_title` (`title`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='头绪知识库文章';
 
 CREATE TABLE IF NOT EXISTS `tx_knowledge_ticket_link` (
@@ -597,14 +613,19 @@ CREATE TABLE IF NOT EXISTS `tx_knowledge_ticket_link` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识库工单关联';
 
 INSERT INTO `sys_role` (id, role_name, role_key, data_scope, status, remark) VALUES
-(5, '客户', 'customer', 5, 1, '客户注册后的默认角色')
+(5, '客户', 'customer', 5, 1, '客户注册后的默认角色'),
+(6, '工单主管', 'supervisor', 4, 1, '工单审批、分派、SLA 升级和知识审核角色')
 ON DUPLICATE KEY UPDATE role_name=VALUES(role_name), role_key=VALUES(role_key), status=VALUES(status);
 
 INSERT INTO `sys_menu` (id, parent_id, title, path, component, icon, sort) VALUES
 (100, 0, '工单中心', '/ticket', NULL, 'CustomerServiceOutlined', 4),
-(101, 100, '工单工作台', '/ticket/workbench', '/ticket/workbench/index', 'ToolOutlined', 1),
-(102, 100, '我的工单', '/ticket/my', '/ticket/my/index', 'ProfileOutlined', 2),
-(103, 100, '知识库', '/ticket/knowledge', '/ticket/knowledge/index', 'BookOutlined', 3)
+(104, 100, '工单首页', '/ticket/index', '/ticket/index', 'DashboardOutlined', 0),
+(105, 100, '提交工单', '/ticket/create', '/ticket/create', 'PlusOutlined', 1),
+(107, 100, '待接工单', '/ticket/pending', '/ticket/pending/index', 'InboxOutlined', 2),
+(101, 100, '工单工作台', '/ticket/workbench', '/ticket/workbench/index', 'ToolOutlined', 3),
+(102, 100, '我的工单', '/ticket/my', '/ticket/my/index', 'ProfileOutlined', 4),
+(106, 100, '系统配置', '/ticket/systems', '/ticket/systems', 'ControlOutlined', 5),
+(103, 100, '知识库', '/ticket/knowledge', '/ticket/knowledge/index', 'BookOutlined', 6)
 ON DUPLICATE KEY UPDATE title=VALUES(title), parent_id=VALUES(parent_id), path=VALUES(path), component=VALUES(component), icon=VALUES(icon), sort=VALUES(sort);
 
 INSERT INTO `sys_permission` (id, name, perm_key, status) VALUES
@@ -627,15 +648,20 @@ INSERT INTO `sys_permission` (id, name, perm_key, status) VALUES
 ON DUPLICATE KEY UPDATE name=VALUES(name), perm_key=VALUES(perm_key), status=VALUES(status);
 
 INSERT IGNORE INTO `sys_menu_permission` (menu_id, perm_id) VALUES
+(104,100),(104,109),
+(105,101),(105,109),(105,110),
+(106,100),
+(107,100),(107,102),(107,104),(107,108),
 (101,100),(101,101),(101,102),(101,103),(101,104),(101,105),(101,106),(101,107),(101,108),
-(102,109),(102,110),(102,111),(102,112),
+(102,101),(102,109),(102,110),(102,111),(102,112),
 (103,120),(103,121),(103,122);
 
 INSERT IGNORE INTO `sys_role_menu` (role_id, menu_id) VALUES
-(1,100),(1,101),(1,102),(1,103),
-(2,100),(2,101),(2,102),(2,103),
-(3,100),(3,101),(3,102),(3,103),
-(5,100),(5,102);
+(1,100),(1,101),(1,102),(1,103),(1,104),(1,105),(1,106),(1,107),
+(2,100),(2,101),(2,102),(2,103),(2,104),(2,105),(2,106),(2,107),
+(3,100),(3,101),(3,102),(3,103),(3,104),(3,105),(3,106),(3,107),
+(5,100),(5,102),(5,104),(5,105),
+(6,100),(6,101),(6,102),(6,103),(6,104),(6,105),(6,106),(6,107);
 
 INSERT IGNORE INTO `sys_role_perm` (role_id, perm_id)
 SELECT 1, id FROM `sys_permission`
@@ -651,10 +677,15 @@ INSERT IGNORE INTO `sys_role_perm` (role_id, perm_id)
 SELECT 3, id FROM `sys_permission`
 WHERE del_flag = 0
   AND perm_key IN (
-    'ticket:list','ticket:receive','ticket:reply','ticket:assign','ticket:transfer',
-    'ticket:resolve','ticket:close','ticket:reject','knowledge:list','knowledge:edit',
+    'ticket:list','ticket:add','ticket:receive','ticket:reply','ticket:transfer',
+    'ticket:resolve','ticket:close','knowledge:list','knowledge:edit',
     'sys:file:upload'
   );
+
+INSERT IGNORE INTO `sys_role_perm` (role_id, perm_id)
+SELECT 6, id FROM `sys_permission`
+WHERE del_flag = 0
+  AND (perm_key LIKE 'ticket:%' OR perm_key LIKE 'knowledge:%' OR perm_key = 'sys:file:upload');
 
 INSERT IGNORE INTO `sys_role_perm` (role_id, perm_id)
 SELECT 5, id FROM `sys_permission`
@@ -672,13 +703,15 @@ INSERT INTO `sys_dict_type` (id, name, code, status) VALUES
 ON DUPLICATE KEY UPDATE name=VALUES(name), code=VALUES(code), status=VALUES(status);
 
 INSERT INTO `sys_dict_data` (id, type_code, parent_id, label, value, sort, status) VALUES
-(1000, 'tx_ticket_status', 0, '待受理', 'pending', 1, 1),
-(1001, 'tx_ticket_status', 0, '处理中', 'processing', 2, 1),
-(1002, 'tx_ticket_status', 0, '待客户补充', 'waiting_customer', 3, 1),
-(1003, 'tx_ticket_status', 0, '已转派', 'transferred', 4, 1),
-(1004, 'tx_ticket_status', 0, '已解决', 'resolved', 5, 1),
-(1005, 'tx_ticket_status', 0, '已关闭', 'closed', 6, 1),
-(1006, 'tx_ticket_status', 0, '已驳回', 'rejected', 7, 1),
+(1008, 'tx_ticket_status', 0, '待审批', 'pending_approval', 1, 1),
+(1000, 'tx_ticket_status', 0, '待受理', 'pending', 2, 1),
+(1001, 'tx_ticket_status', 0, '处理中', 'processing', 3, 1),
+(1002, 'tx_ticket_status', 0, '待客户补充', 'waiting_customer', 4, 1),
+(1003, 'tx_ticket_status', 0, '已转派', 'transferred', 5, 1),
+(1004, 'tx_ticket_status', 0, '已解决', 'resolved', 6, 1),
+(1005, 'tx_ticket_status', 0, '已关闭', 'closed', 7, 1),
+(1006, 'tx_ticket_status', 0, '已驳回', 'rejected', 8, 1),
+(1009, 'tx_ticket_status', 0, '已撤销', 'cancelled', 9, 1),
 (1010, 'tx_ticket_priority', 0, '低', 'low', 1, 1),
 (1011, 'tx_ticket_priority', 0, '普通', 'normal', 2, 1),
 (1012, 'tx_ticket_priority', 0, '高', 'high', 3, 1),
@@ -688,16 +721,77 @@ INSERT INTO `sys_dict_data` (id, type_code, parent_id, label, value, sort, statu
 (1022, 'tx_ticket_category', 0, '系统故障', 'system', 3, 1),
 (1023, 'tx_ticket_category', 0, '账号权限', 'account', 4, 1),
 (1030, 'tx_ticket_action', 0, '创建工单', 'created', 1, 1),
-(1031, 'tx_ticket_action', 0, '接单', 'received', 2, 1),
-(1032, 'tx_ticket_action', 0, '回复', 'replied', 3, 1),
-(1033, 'tx_ticket_action', 0, '分派', 'assigned', 4, 1),
-(1034, 'tx_ticket_action', 0, '转派', 'transferred', 5, 1),
-(1035, 'tx_ticket_action', 0, '解决', 'resolved', 6, 1),
-(1036, 'tx_ticket_action', 0, '关闭', 'closed', 7, 1),
-(1037, 'tx_ticket_action', 0, '驳回', 'rejected', 8, 1),
+(1060, 'tx_ticket_action', 0, '审批通过', 'approved', 2, 1),
+(1061, 'tx_ticket_action', 0, '退回补充', 'returned', 3, 1),
+(1031, 'tx_ticket_action', 0, '接单', 'received', 4, 1),
+(1032, 'tx_ticket_action', 0, '回复', 'replied', 5, 1),
+(1033, 'tx_ticket_action', 0, '分派', 'assigned', 6, 1),
+(1034, 'tx_ticket_action', 0, '转派', 'transferred', 7, 1),
+(1035, 'tx_ticket_action', 0, '解决', 'resolved', 8, 1),
+(1036, 'tx_ticket_action', 0, '关闭', 'closed', 9, 1),
+(1037, 'tx_ticket_action', 0, '驳回', 'rejected', 10, 1),
+(1038, 'tx_ticket_action', 0, '合并', 'merged', 11, 1),
+(1062, 'tx_ticket_action', 0, '重开', 'reopened', 12, 1),
+(1063, 'tx_ticket_action', 0, '评价', 'evaluated', 13, 1),
+(1064, 'tx_ticket_action', 0, 'SLA 提醒', 'sla_warned', 14, 1),
+(1065, 'tx_ticket_action', 0, '撤销', 'cancelled', 15, 1),
 (1040, 'tx_knowledge_status', 0, '草稿', 'draft', 1, 1),
-(1041, 'tx_knowledge_status', 0, '已发布', 'published', 2, 1),
-(1042, 'tx_knowledge_status', 0, '已下架', 'withdrawn', 3, 1)
+(1043, 'tx_knowledge_status', 0, '待审核', 'reviewing', 2, 1),
+(1044, 'tx_knowledge_status', 0, '审核驳回', 'rejected', 3, 1),
+(1041, 'tx_knowledge_status', 0, '已发布', 'published', 4, 1),
+(1042, 'tx_knowledge_status', 0, '已下架', 'withdrawn', 5, 1)
 ON DUPLICATE KEY UPDATE label=VALUES(label), value=VALUES(value), sort=VALUES(sort), status=VALUES(status);
+
+INSERT INTO `sys_dict_type` (id, name, code, status) VALUES
+(105, '工单所属系统', 'tx_ticket_system', 1)
+ON DUPLICATE KEY UPDATE name=VALUES(name), code=VALUES(code), status=VALUES(status);
+
+INSERT INTO `sys_dict_data` (id, type_code, parent_id, label, value, sort, status, remark) VALUES
+(1007, 'tx_ticket_status', 0, '草稿', 'draft', 0, 1, NULL),
+(1008, 'tx_ticket_status', 0, '待审批', 'pending_approval', 1, 1, NULL),
+(1000, 'tx_ticket_status', 0, '待受理', 'pending', 2, 1, NULL),
+(1001, 'tx_ticket_status', 0, '处理中', 'processing', 3, 1, NULL),
+(1002, 'tx_ticket_status', 0, '待客户补充', 'waiting_customer', 4, 1, NULL),
+(1003, 'tx_ticket_status', 0, '已转派', 'transferred', 5, 1, NULL),
+(1004, 'tx_ticket_status', 0, '已解决', 'resolved', 6, 1, NULL),
+(1005, 'tx_ticket_status', 0, '已关闭', 'closed', 7, 1, NULL),
+(1006, 'tx_ticket_status', 0, '已驳回', 'rejected', 8, 1, NULL),
+(1009, 'tx_ticket_status', 0, '已撤销', 'cancelled', 9, 1, NULL),
+(1010, 'tx_ticket_priority', 0, '低', 'low', 1, 1, NULL),
+(1011, 'tx_ticket_priority', 0, '普通', 'normal', 2, 1, NULL),
+(1012, 'tx_ticket_priority', 0, '高', 'high', 3, 1, NULL),
+(1013, 'tx_ticket_priority', 0, '紧急', 'urgent', 4, 1, NULL),
+(1020, 'tx_ticket_category', 0, '通用问题', 'general', 1, 1, NULL),
+(1021, 'tx_ticket_category', 0, '网络问题', 'network', 2, 1, NULL),
+(1022, 'tx_ticket_category', 0, '系统问题', 'system', 3, 1, NULL),
+(1023, 'tx_ticket_category', 0, '账号权限', 'account', 4, 1, NULL),
+(1024, 'tx_ticket_category', 0, '服务器问题', 'server', 5, 1, NULL),
+(1025, 'tx_ticket_category', 0, '数据问题', 'data', 6, 1, NULL),
+(1026, 'tx_ticket_category', 0, '其他问题', 'other', 7, 1, NULL),
+(1030, 'tx_ticket_action', 0, '创建工单', 'created', 1, 1, NULL),
+(1060, 'tx_ticket_action', 0, '审批通过', 'approved', 2, 1, NULL),
+(1061, 'tx_ticket_action', 0, '退回补充', 'returned', 3, 1, NULL),
+(1031, 'tx_ticket_action', 0, '接单', 'received', 4, 1, NULL),
+(1032, 'tx_ticket_action', 0, '回复', 'replied', 5, 1, NULL),
+(1033, 'tx_ticket_action', 0, '分派', 'assigned', 6, 1, NULL),
+(1034, 'tx_ticket_action', 0, '转派', 'transferred', 7, 1, NULL),
+(1035, 'tx_ticket_action', 0, '解决', 'resolved', 8, 1, NULL),
+(1036, 'tx_ticket_action', 0, '关闭', 'closed', 9, 1, NULL),
+(1037, 'tx_ticket_action', 0, '驳回', 'rejected', 10, 1, NULL),
+(1038, 'tx_ticket_action', 0, '合并', 'merged', 11, 1, NULL),
+(1062, 'tx_ticket_action', 0, '重开', 'reopened', 12, 1, NULL),
+(1063, 'tx_ticket_action', 0, '评价', 'evaluated', 13, 1, NULL),
+(1064, 'tx_ticket_action', 0, 'SLA 提醒', 'sla_warned', 14, 1, NULL),
+(1065, 'tx_ticket_action', 0, '撤销', 'cancelled', 15, 1, NULL),
+(1050, 'tx_ticket_system', 0, 'ERP 系统', 'erp', 1, 1, '{"ownerGroup":"应用运维一组","defaultPriority":"normal","remark":"财务、销售、库存相关问题"}'),
+(1051, 'tx_ticket_system', 0, 'CRM 系统', 'crm', 2, 1, '{"ownerGroup":"应用运维二组","defaultPriority":"normal","remark":"客户、商机、跟进记录相关问题"}'),
+(1052, 'tx_ticket_system', 0, 'OA 办公系统', 'oa', 3, 1, '{"ownerGroup":"综合运维组","defaultPriority":"normal","remark":"审批、流程、通知相关问题"}'),
+(1053, 'tx_ticket_system', 0, '网络与基础设施', 'network', 4, 1, '{"ownerGroup":"基础设施组","defaultPriority":"high","remark":"网络、VPN、服务器与机房类问题"}')
+ON DUPLICATE KEY UPDATE
+label=VALUES(label),
+value=VALUES(value),
+sort=VALUES(sort),
+status=VALUES(status),
+remark=VALUES(remark);
 
 SET FOREIGN_KEY_CHECKS = 1;

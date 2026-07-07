@@ -29,7 +29,7 @@
                 <a-tag :color="priorityColor(item.priority)">{{ item.priority }}</a-tag>
               </template>
               <template #description>
-                接收时间：{{ item.receiveTime || '-' }}　发布时间：{{ item.publishTime || '-' }}
+                接收时间：{{ formatDateTime(item.receiveTime) }}　发布时间：{{ formatDateTime(item.publishTime) }}
               </template>
             </a-list-item-meta>
             <div class="notice-preview">{{ item.content }}</div>
@@ -42,7 +42,7 @@
       <div class="detail-meta">
         <a-tag>{{ detailModal.data.noticeType }}</a-tag>
         <a-tag :color="priorityColor(detailModal.data.priority)">{{ detailModal.data.priority }}</a-tag>
-        <span>发布时间：{{ detailModal.data.publishTime || '-' }}</span>
+        <span>发布时间：{{ formatDateTime(detailModal.data.publishTime) }}</span>
       </div>
       <div class="detail-content">{{ detailModal.data.content }}</div>
     </a-modal>
@@ -52,6 +52,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import request from '@/api/request'
+import { formatDateTime } from '@/utils/datetime'
 
 const loading = ref(false)
 const noticeList = ref([])

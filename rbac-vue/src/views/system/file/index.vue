@@ -216,6 +216,7 @@ import { useEcharts } from '@/utils/useEcharts'
 import { STATUS_COLORS } from '@/theme/palette'
 import { downloadByRequest } from '@/utils/download'
 import { getAuthedPreviewUrl, revokeAuthedPreviewUrl } from '@/utils/file-preview'
+import { formatDateTime } from '@/utils/datetime'
 import FilePreview from '@/components/file-preview/index.vue'
 
 const { initChart } = useEcharts()
@@ -251,7 +252,7 @@ const columns = [
   { title: '大小', dataIndex: 'fileSize', key: 'fileSize', width: 120 },
   { title: '访问入口', dataIndex: 'url', key: 'url', ellipsis: true },
   { title: '存储位置', dataIndex: 'storageType', key: 'storageType', width: 100 },
-  { title: '上传时间', dataIndex: 'createTime', key: 'createTime', width: 180 },
+  { title: '上传时间', dataIndex: 'createTime', key: 'createTime', width: 180, customRender: ({ text }) => formatDateTime(text) },
   { title: '操作', key: 'action', width: 160, fixed: 'right' }
 ]
 

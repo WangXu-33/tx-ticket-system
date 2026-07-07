@@ -1,5 +1,5 @@
 <template>
-  <div class="page-container ticket-workbench-page">
+  <div class="page-container ticket-pending-page">
     <ticket-filter-card v-model:collapsed="queryCollapsed">
       <a-form layout="inline" :model="query" class="compact-filter-form">
         <a-form-item label="工单编号">
@@ -10,16 +10,6 @@
         </a-form-item>
         <a-form-item label="客户">
           <a-input v-model:value="query.creatorName" allow-clear placeholder="客户名称" style="width: 180px" />
-        </a-form-item>
-        <a-form-item label="处理人">
-          <a-input v-model:value="query.handlerName" allow-clear placeholder="处理人名称" style="width: 180px" />
-        </a-form-item>
-        <a-form-item label="状态">
-          <a-select v-model:value="query.status" allow-clear placeholder="状态" style="width: 150px">
-            <a-select-option v-for="item in statusOptions" :key="item.value" :value="item.value">
-              {{ item.label }}
-            </a-select-option>
-          </a-select>
         </a-form-item>
         <a-form-item label="优先级">
           <a-select v-model:value="query.priority" allow-clear placeholder="优先级" style="width: 140px">
@@ -45,14 +35,6 @@
     </ticket-filter-card>
 
     <a-card :bordered="false" class="table-card">
-      <div class="table-tabs-bar">
-        <a-tabs v-model:activeKey="activeBoard" class="table-tabs" @change="handleBoardChange">
-          <a-tab-pane key="processing" tab="我处理中" />
-          <a-tab-pane key="resolved" tab="我已完成" />
-          <a-tab-pane key="all" tab="全部工单" />
-        </a-tabs>
-      </div>
-
       <a-table
         row-key="id"
         size="small"
@@ -60,7 +42,7 @@
         :data-source="dataSource"
         :loading="loading"
         :pagination="pagination"
-        :scroll="{ x: 1300 }"
+        :scroll="{ x: 1240 }"
         @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
@@ -80,11 +62,32 @@
             <a-space size="small" wrap>
               <a class="table-action-link" @click="goDetail(record.id)">详情</a>
               <a
-                v-if="canProcess(record)"
+                v-if="canApprove(record)"
                 class="table-action-link table-action-link--primary"
-                @click="goProcess(record.id)"
+                @click="approve(record)"
               >
-                处理
+                通过
+              </a>
+              <a
+                v-if="canReturn(record)"
+                class="table-action-link table-action-link--warning"
+                @click="openReviewAction(record, 'return')"
+              >
+                退回
+              </a>
+              <a
+                v-if="canReject(record)"
+                class="table-action-link table-action-link--danger"
+                @click="openReviewAction(record, 'reject')"
+              >
+                驳回
+              </a>
+              <a
+                v-if="canReceive(record)"
+                class="table-action-link table-action-link--success"
+                @click="receive(record.id)"
+              >
+                接单
               </a>
               <a
                 v-if="canAssign(record)"
@@ -92,13 +95,6 @@
                 @click="openAssign(record)"
               >
                 分派
-              </a>
-              <a
-                v-if="canTransfer(record)"
-                class="table-action-link table-action-link--warning"
-                @click="openTransfer(record)"
-              >
-                转派
               </a>
             </a-space>
           </template>
@@ -108,7 +104,7 @@
 
     <a-modal
       v-model:open="assignVisible"
-      :title="assignMode === 'transfer' ? '转派工单' : '分派工单'"
+      title="分派工单"
       :confirm-loading="assignLoading"
       @ok="submitAssign"
     >
@@ -128,10 +124,23 @@
           </a-select>
         </a-form-item>
         <a-form-item label="说明">
+          <a-textarea v-model:value="assignForm.reason" :rows="4" placeholder="写清分派原因或处理要求" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="reviewActionVisible"
+      :title="reviewActionTitle"
+      :confirm-loading="reviewActionLoading"
+      @ok="submitReviewAction"
+    >
+      <a-form layout="vertical" :model="reviewActionForm">
+        <a-form-item label="处理说明" required>
           <a-textarea
-            v-model:value="assignForm.reason"
+            v-model:value="reviewActionForm.content"
             :rows="4"
-            :placeholder="assignMode === 'transfer' ? '写清当前排查情况与转派原因' : '写清分派原因或处理要求'"
+            :placeholder="reviewActionMode === 'return' ? '写清需要客户补充的材料或信息' : '写清驳回原因，客户侧可见'"
           />
         </a-form-item>
       </a-form>
@@ -145,7 +154,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { ticketApi } from '@/api/ticket'
 import { formatDateTime } from '@/utils/datetime'
-import { getCurrentUserId, hasAnyRole } from '@/utils/auth'
+import { hasAnyRole } from '@/utils/auth'
 import { hasAnyPermission } from '@/utils/permission'
 import { getOptionColor, getOptionLabel, loadTicketMeta } from '@/utils/ticket-meta'
 import TicketFilterCard from '../components/TicketFilterCard.vue'
@@ -153,30 +162,27 @@ import TicketFilterCard from '../components/TicketFilterCard.vue'
 const router = useRouter()
 const loading = ref(false)
 const assignLoading = ref(false)
+const reviewActionLoading = ref(false)
 const queryCollapsed = ref(false)
-const activeBoard = ref('processing')
 const dataSource = ref([])
 const handlerOptions = ref([])
 const statusOptions = ref([])
 const priorityOptions = ref([])
 const categoryOptions = ref([])
 const assignVisible = ref(false)
-const assignMode = ref('assign')
+const reviewActionVisible = ref(false)
+const reviewActionMode = ref('return')
 const currentTicket = ref(null)
 
-const currentUserId = computed(() => getCurrentUserId())
 const managerMode = computed(() => hasAnyRole(['admin', 'system_admin', 'supervisor']))
 
 const query = reactive({
   ticketNo: '',
   title: '',
   creatorName: '',
-  handlerName: '',
-  status: undefined,
-  statusList: '',
+  statusList: 'pending',
   priority: undefined,
   category: undefined,
-  owner: '',
   pageNum: 1,
   pageSize: 10
 })
@@ -186,16 +192,19 @@ const assignForm = reactive({
   reason: ''
 })
 
+const reviewActionForm = reactive({
+  content: ''
+})
+
 const pagination = reactive({ current: 1, pageSize: 10, total: 0, showSizeChanger: true })
 
 const columns = [
   { title: '工单编号', dataIndex: 'ticketNo', key: 'ticketNo', width: 180, ellipsis: true },
-  { title: '工单标题', dataIndex: 'title', key: 'title', width: 300, ellipsis: true },
+  { title: '工单标题', dataIndex: 'title', key: 'title', width: 320, ellipsis: true },
   { title: '问题类型', dataIndex: 'category', key: 'category', width: 130 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
   { title: '优先级', dataIndex: 'priority', key: 'priority', width: 110 },
-  { title: '客户', dataIndex: 'creatorName', key: 'creatorName', width: 140, ellipsis: true },
-  { title: '处理人', dataIndex: 'handlerName', key: 'handlerName', width: 140, ellipsis: true },
+  { title: '客户', dataIndex: 'creatorName', key: 'creatorName', width: 150, ellipsis: true },
   {
     title: '创建时间',
     dataIndex: 'createTime',
@@ -203,18 +212,12 @@ const columns = [
     width: 180,
     customRender: ({ text }) => formatDateTime(text)
   },
-  { title: '操作', key: 'action', width: 220, fixed: 'right' }
+  { title: '操作', key: 'action', width: 260, fixed: 'right' }
 ]
 
 /**
- * 2026-07-03 调整工单工作台查询视图，仅保留处理中的运维视角。
+ * 2026-07-03 独立待接工单大厅，避免在工作台内误触接单动作。
  */
-const boardQueryMap = {
-  processing: { owner: 'my', statusList: 'processing,waiting_customer,transferred' },
-  resolved: { owner: 'my', statusList: 'resolved,closed' },
-  all: { owner: '', statusList: 'pending_approval,pending,processing,waiting_customer,transferred,resolved,closed,rejected,cancelled' }
-}
-
 const fetchMeta = async () => {
   const meta = await loadTicketMeta()
   statusOptions.value = meta.statusOptions || []
@@ -222,17 +225,8 @@ const fetchMeta = async () => {
   categoryOptions.value = meta.categoryOptions || []
 }
 
-/**
- * 2026-07-03 根据当前工作台视图收敛查询范围，避免待接工单混入处理视角。
- */
-const applyBoardQuery = () => {
-  const currentBoardQuery = boardQueryMap[activeBoard.value] || boardQueryMap.processing
-  query.owner = currentBoardQuery.owner
-  query.statusList = currentBoardQuery.statusList
-}
-
 const fetchData = async () => {
-  applyBoardQuery()
+  query.statusList = 'pending_approval,pending'
   loading.value = true
   try {
     const res = await ticketApi.list(query)
@@ -262,64 +256,69 @@ const handleTableChange = page => {
   fetchData()
 }
 
-const handleBoardChange = () => {
-  query.pageNum = 1
-  fetchData()
-}
-
 const resetQuery = () => {
   query.ticketNo = ''
   query.title = ''
   query.creatorName = ''
-  query.handlerName = ''
-  query.status = undefined
   query.priority = undefined
   query.category = undefined
   query.pageNum = 1
   fetchData()
 }
 
-const isReadonlyStatus = record => ['pending_approval', 'pending', 'resolved', 'closed', 'rejected', 'cancelled'].includes(record.status)
-const isTerminal = record => ['closed', 'rejected', 'cancelled'].includes(record.status)
+const reviewActionTitle = computed(() => (reviewActionMode.value === 'return' ? '退回客户补充' : '驳回工单'))
+const canApprove = record => hasAnyPermission(['ticket:assign']) && managerMode.value && record.status === 'pending_approval'
+const canReturn = record => hasAnyPermission(['ticket:assign']) && managerMode.value && ['pending_approval', 'pending'].includes(record.status)
+const canReject = record => hasAnyPermission(['ticket:reject']) && managerMode.value && ['pending_approval', 'pending'].includes(record.status)
+const canReceive = record => hasAnyPermission(['ticket:receive']) && record.status === 'pending'
+const canAssign = record => hasAnyPermission(['ticket:assign']) && managerMode.value && record.status === 'pending'
 
-const canProcess = record => {
-  if (isReadonlyStatus(record) || !hasAnyPermission(['ticket:reply', 'ticket:resolve', 'ticket:transfer'])) {
-    return false
-  }
-  return managerMode.value || record.handlerId === currentUserId.value
+const approve = async record => {
+  await ticketApi.approve({ ticketId: record.id, content: '审批通过，进入待受理大厅' })
+  message.success('审批已通过')
+  fetchData()
 }
 
-const canAssign = record => {
-  if (!hasAnyPermission(['ticket:assign']) || !managerMode.value) {
-    return false
-  }
-  return ['processing', 'waiting_customer', 'transferred'].includes(record.status)
-}
-
-const canTransfer = record => {
-  if (!hasAnyPermission(['ticket:transfer']) || isTerminal(record)) {
-    return false
-  }
-  if (!['processing', 'waiting_customer', 'transferred'].includes(record.status)) {
-    return false
-  }
-  return managerMode.value || record.handlerId === currentUserId.value
+const receive = async id => {
+  await ticketApi.receive(id)
+  message.success('接单成功')
+  fetchData()
 }
 
 const openAssign = record => {
   currentTicket.value = record
-  assignMode.value = 'assign'
   assignForm.handlerId = record.handlerId || null
   assignForm.reason = ''
   assignVisible.value = true
 }
 
-const openTransfer = record => {
+const openReviewAction = (record, mode) => {
   currentTicket.value = record
-  assignMode.value = 'transfer'
-  assignForm.handlerId = null
-  assignForm.reason = ''
-  assignVisible.value = true
+  reviewActionMode.value = mode
+  reviewActionForm.content = ''
+  reviewActionVisible.value = true
+}
+
+const submitReviewAction = async () => {
+  if (!reviewActionForm.content.trim()) {
+    message.warning(reviewActionMode.value === 'return' ? '请填写退回补充原因' : '请填写驳回原因')
+    return
+  }
+  reviewActionLoading.value = true
+  try {
+    const payload = { ticketId: currentTicket.value.id, content: reviewActionForm.content }
+    if (reviewActionMode.value === 'return') {
+      await ticketApi.returnForSupplement(payload)
+      message.success('已退回客户补充')
+    } else {
+      await ticketApi.reject(payload)
+      message.success('工单已驳回')
+    }
+    reviewActionVisible.value = false
+    fetchData()
+  } finally {
+    reviewActionLoading.value = false
+  }
 }
 
 const submitAssign = async () => {
@@ -329,9 +328,8 @@ const submitAssign = async () => {
   }
   assignLoading.value = true
   try {
-    const action = assignMode.value === 'transfer' ? ticketApi.transfer : ticketApi.assign
-    await action({ ticketId: currentTicket.value.id, handlerId: assignForm.handlerId, reason: assignForm.reason })
-    message.success(assignMode.value === 'transfer' ? '转派成功' : '分派成功')
+    await ticketApi.assign({ ticketId: currentTicket.value.id, handlerId: assignForm.handlerId, reason: assignForm.reason })
+    message.success('分派成功')
     assignVisible.value = false
     fetchData()
   } finally {
@@ -340,7 +338,6 @@ const submitAssign = async () => {
 }
 
 const goDetail = id => router.push(`/ticket/detail/${id}`)
-const goProcess = id => router.push(`/ticket/process/${id}`)
 
 const statusText = value => getOptionLabel(statusOptions.value, value, value || '-')
 const statusColor = value => getOptionColor(statusOptions.value, value, 'default')
@@ -356,7 +353,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.ticket-workbench-page {
+.ticket-pending-page {
   display: flex;
   flex-direction: column;
 }
@@ -364,19 +361,6 @@ onMounted(async () => {
 .table-card {
   border-radius: 18px;
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.05);
-}
-
-.table-tabs-bar {
-  margin-bottom: 8px;
-}
-
-.table-tabs :deep(.ant-tabs-nav) {
-  margin: 0 0 12px;
-}
-
-.table-tabs :deep(.ant-tabs-tab) {
-  padding: 0 0 10px;
-  font-weight: 600;
 }
 
 .link-text {
@@ -409,6 +393,18 @@ onMounted(async () => {
   color: #0f172a;
 }
 
+.table-action-link--success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.table-action-link--success:hover {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #166534;
+}
+
 .table-action-link--primary {
   border-color: #bfdbfe;
   background: #eff6ff;
@@ -431,6 +427,18 @@ onMounted(async () => {
   border-color: #fcd34d;
   background: #fef3c7;
   color: #92400e;
+}
+
+.table-action-link--danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.table-action-link--danger:hover {
+  border-color: #fca5a5;
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 @media (max-width: 1200px) {

@@ -108,7 +108,7 @@ public class SysFileService {
 
         List<String> allowedSuffixes = parseSuffixes(defaultConfig(
                 configService.getConfigValue("file.security.allowed-suffixes"),
-                ".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                ".jpg,.jpeg,.png,.gif,.webp,.svg,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.log,.json,.xml,.csv,.zip,.rar,.mp4,.webm,.mov,.avi"
         ));
         if (!allowedSuffixes.isEmpty() && !allowedSuffixes.contains(suffix)) {
             throw new IllegalArgumentException("当前文件类型不在允许上传范围内");
@@ -117,16 +117,16 @@ public class SysFileService {
 
     private long resolveMaxSizeBytes() {
         String value = configService.getConfigValue("file.security.max-size-mb");
-        long maxSizeMb = 20L;
+        long maxSizeMb = 200L;
         if (StringUtils.hasText(value)) {
             try {
                 maxSizeMb = Long.parseLong(value.trim());
             } catch (NumberFormatException ignored) {
-                maxSizeMb = 20L;
+                maxSizeMb = 200L;
             }
         }
         if (maxSizeMb <= 0) {
-            maxSizeMb = 20L;
+            maxSizeMb = 200L;
         }
         return maxSizeMb * 1024 * 1024;
     }

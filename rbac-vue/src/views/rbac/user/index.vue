@@ -57,6 +57,7 @@ import { useRouter } from 'vue-router'
 import { SearchOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import request from '@/api/request'
 import { message } from 'ant-design-vue'
+import { formatDateTime } from '@/utils/datetime'
 
 const router = useRouter()
 const loading = ref(false)
@@ -69,7 +70,7 @@ const columns = [
   { title: '昵称', dataIndex: 'nickname', key: 'nickname' },
   { title: '手机号', dataIndex: 'phone', key: 'phone' },
   { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
-  { title: '创建时间', dataIndex: 'createTime', key: 'createTime' },
+  { title: '创建时间', dataIndex: 'createTime', key: 'createTime', customRender: ({ text }) => formatDateTime(text) },
   { title: '操作', key: 'action', width: 210, fixed: 'right' }
 ]
 

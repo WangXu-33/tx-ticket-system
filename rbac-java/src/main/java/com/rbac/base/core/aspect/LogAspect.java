@@ -16,9 +16,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Aspect
 @Component
@@ -40,6 +48,59 @@ public class LogAspect {
     @AfterReturning(pointcut = "logPointCut()", returning = "jsonResult")
     public void doAfterReturning(JoinPoint joinPoint, Object jsonResult) {
         handleLog(joinPoint, null, jsonResult);
+    }
+
+    private String buildOperParam(Object[] args) throws Exception {
+        List<Object> serializableArgs = new ArrayList<>();
+        for (Object arg : args) {
+            Object normalized = normalizeArg(arg);
+            if (normalized != null) {
+                serializableArgs.add(normalized);
+            }
+        }
+        if (serializableArgs.isEmpty()) {
+            return null;
+        }
+        Object payload = serializableArgs.size() == 1 ? serializableArgs.get(0) : serializableArgs;
+        return objectMapper.writeValueAsString(payload);
+    }
+
+    private Object normalizeArg(Object arg) {
+        if (arg == null) {
+            return null;
+        }
+        if (arg instanceof ServletRequest || arg instanceof ServletResponse) {
+            return "[" + arg.getClass().getSimpleName() + " omitted]";
+        }
+        if (arg instanceof MultipartFile file) {
+            return buildMultipartSummary(file);
+        }
+        if (arg instanceof MultipartFile[] files) {
+            List<Map<String, Object>> summaries = new ArrayList<>();
+            for (MultipartFile file : files) {
+                summaries.add(buildMultipartSummary(file));
+            }
+            return summaries;
+        }
+        if (arg instanceof Collection<?> collection) {
+            List<Object> items = new ArrayList<>();
+            for (Object item : collection) {
+                Object normalized = normalizeArg(item);
+                if (normalized != null) {
+                    items.add(normalized);
+                }
+            }
+            return items;
+        }
+        return arg;
+    }
+
+    private Map<String, Object> buildMultipartSummary(MultipartFile file) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("fileName", file.getOriginalFilename());
+        summary.put("contentType", file.getContentType());
+        summary.put("fileSize", file.getSize());
+        return summary;
     }
 
     /**
@@ -99,7 +160,7 @@ public class LogAspect {
             
             // 设置参数
             if (joinPoint.getArgs() != null && joinPoint.getArgs().length > 0) {
-                String params = objectMapper.writeValueAsString(joinPoint.getArgs()[0]);
+                String params = buildOperParam(joinPoint.getArgs());
                 operLog.setOperParam(StrUtil.sub(params, 0, 2000));
             }
             

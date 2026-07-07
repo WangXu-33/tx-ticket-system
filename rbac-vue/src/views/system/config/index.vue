@@ -67,7 +67,7 @@
               <a-row :gutter="32">
                 <a-col :span="20">
                   <a-form-item label="允许上传后缀">
-                    <a-textarea v-model:value="configForm['file.security.allowed-suffixes']" :rows="3" placeholder=".jpg,.png,.pdf,.docx,.xlsx,.zip" />
+                    <a-textarea v-model:value="configForm['file.security.allowed-suffixes']" :rows="3" placeholder=".jpg,.png,.pdf,.md,.mp4,.zip" />
                     <div class="tip-text">英文逗号分隔；留空表示只按禁止后缀拦截。</div>
                   </a-form-item>
                 </a-col>
@@ -215,8 +215,8 @@ const configForm = reactive({
   'system.storage.active': 'localStorageService',
   'local.storage.path': '',
   'local.storage.domain': '',
-  'file.security.max-size-mb': '20',
-  'file.security.allowed-suffixes': '.jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar',
+  'file.security.max-size-mb': '200',
+  'file.security.allowed-suffixes': '.jpg,.jpeg,.png,.gif,.webp,.svg,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.log,.json,.xml,.csv,.zip,.rar,.mp4,.webm,.mov,.avi',
   'file.security.blocked-suffixes': '.exe,.bat,.cmd,.sh,.ps1,.jar,.war,.msi,.dll,.com,.scr',
   'aliyun.oss.endpoint': '',
   'aliyun.oss.bucketName': '',

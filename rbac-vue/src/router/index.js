@@ -18,29 +18,59 @@ const routes = [
         meta: { title: '首页' }
       },
       {
+        path: 'ticket',
+        redirect: '/ticket/index',
+        meta: { title: '工单中心', permission: ['ticket:list', 'ticket:my:list'] }
+      },
+      {
+        path: 'ticket/index',
+        component: () => import('../views/ticket/index.vue'),
+        meta: { title: '工单首页', permission: ['ticket:list', 'ticket:my:list'] }
+      },
+      {
+        path: 'ticket/create',
+        component: () => import('../views/ticket/create.vue'),
+        meta: { title: '提交工单', permission: ['ticket:add', 'ticket:my:add'] }
+      },
+      {
+        path: 'ticket/systems',
+        component: () => import('../views/ticket/systems.vue'),
+        meta: { title: '系统配置', permission: ['ticket:list'] }
+      },
+      {
+        path: 'ticket/process/:id',
+        component: () => import('../views/ticket/process.vue'),
+        meta: { title: '处理工单', permission: ['ticket:list'] }
+      },
+      {
+        path: 'ticket/pending',
+        component: () => import('../views/ticket/pending/index.vue'),
+        meta: { title: '待接工单', permission: ['ticket:list'] }
+      },
+      {
         path: 'ticket/workbench',
         component: () => import('../views/ticket/workbench/index.vue'),
-        meta: { title: 'Ticket Workbench', permission: ['ticket:list'] }
+        meta: { title: '工单工作台', permission: ['ticket:list'] }
       },
       {
         path: 'ticket/my',
         component: () => import('../views/ticket/my/index.vue'),
-        meta: { title: 'My Tickets', permission: ['ticket:my:list'] }
+        meta: { title: '我的工单', permission: ['ticket:my:list', 'ticket:add'] }
       },
       {
         path: 'ticket/detail/:id',
         component: () => import('../views/ticket/detail/index.vue'),
-        meta: { title: 'Ticket Detail', permission: ['ticket:list', 'ticket:my:list'] }
+        meta: { title: '工单详情', permission: ['ticket:list', 'ticket:my:list'] }
       },
       {
         path: 'ticket/knowledge',
         component: () => import('../views/ticket/knowledge/index.vue'),
-        meta: { title: 'Knowledge Base', permission: ['knowledge:list'] }
+        meta: { title: '知识库', permission: ['knowledge:list'] }
       },
       {
         path: 'ticket/knowledge/detail/:id?',
         component: () => import('../views/ticket/knowledge/detail.vue'),
-        meta: { title: 'Knowledge Editor', permission: ['knowledge:edit'] }
+        meta: { title: '知识详情', permission: ['knowledge:list', 'knowledge:edit'] }
       },
       {
         path: 'system/user',

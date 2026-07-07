@@ -160,6 +160,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import request from '@/api/request'
+import { formatDateTime } from '@/utils/datetime'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -181,9 +182,9 @@ const statusMap = {
 const columns = [
   { title: '公告', key: 'title' },
   { title: '状态', key: 'status', width: 110 },
-  { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 180 },
+  { title: '发布时间', dataIndex: 'publishTime', key: 'publishTime', width: 180, customRender: ({ text }) => formatDateTime(text) },
   { title: '阅读统计', key: 'stats', width: 260 },
-  { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 180 },
+  { title: '创建时间', dataIndex: 'createTime', key: 'createTime', width: 180, customRender: ({ text }) => formatDateTime(text) },
   { title: '操作', key: 'action', width: 260 }
 ]
 

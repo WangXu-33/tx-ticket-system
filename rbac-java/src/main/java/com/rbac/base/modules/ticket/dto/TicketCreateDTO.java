@@ -13,11 +13,14 @@ import java.util.List;
  */
 @Data
 public class TicketCreateDTO {
+    private Long id;
     private String title;
     private String description;
     private String category;
+    private String systemCode;
     private String priority;
     private String contactPhone;
     private String contactEmail;
+    private Boolean draft;
     private List<Long> fileIds;
 }

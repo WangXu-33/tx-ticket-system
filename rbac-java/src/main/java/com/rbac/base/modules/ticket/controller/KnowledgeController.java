@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.rbac.base.core.annotation.Log;
 import com.rbac.base.core.common.Result;
 import com.rbac.base.modules.ticket.dto.KnowledgeSaveDTO;
+import com.rbac.base.modules.ticket.dto.TicketActionDTO;
 import com.rbac.base.modules.ticket.service.KnowledgeService;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,9 +29,11 @@ public class KnowledgeController {
     public Result<?> list(@RequestParam(defaultValue = "1") Integer pageNum,
                           @RequestParam(defaultValue = "10") Integer pageSize,
                           @RequestParam(required = false) String keyword,
+                          @RequestParam(required = false) String title,
+                          @RequestParam(required = false) String tags,
                           @RequestParam(required = false) String category,
                           @RequestParam(required = false) String status) {
-        return Result.success(knowledgeService.page(pageNum, pageSize, keyword, category, status));
+        return Result.success(knowledgeService.page(pageNum, pageSize, keyword, title, tags, category, status));
     }
 
     @GetMapping("/detail/{id}")
@@ -58,6 +61,22 @@ public class KnowledgeController {
     @Log(title = "知识库发布", businessType = 2)
     public Result<?> publish(@PathVariable Long id) {
         knowledgeService.publish(id);
+        return Result.success();
+    }
+
+    @PostMapping("/submit-review/{id}")
+    @SaCheckPermission("knowledge:edit")
+    @Log(title = "知识库提交审核", businessType = 2)
+    public Result<?> submitReview(@PathVariable Long id) {
+        knowledgeService.submitReview(id);
+        return Result.success();
+    }
+
+    @PostMapping("/reject-review/{id}")
+    @SaCheckPermission("knowledge:publish")
+    @Log(title = "知识库审核驳回", businessType = 2)
+    public Result<?> rejectReview(@PathVariable Long id, @RequestBody TicketActionDTO dto) {
+        knowledgeService.rejectReview(id, dto == null ? null : dto.getContent());
         return Result.success();
     }
 

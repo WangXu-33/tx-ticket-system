@@ -18,6 +18,10 @@ spring:
 
   main:
     banner-mode: off
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 220MB
 
 # Sa-Token 配置
 sa-token:
@@ -35,3 +39,13 @@ mybatis-plus:
   configuration:
     map-underline-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# 工单 AI/Agent 预留配置
+# TODO(agent): 下一阶段确定 Spring AI 或 LangChain4j 后，启用 enabled 并填入模型网关参数。
+ticket:
+  ai:
+    enabled: ${TICKET_AI_ENABLED:false}
+    provider: ${TICKET_AI_PROVIDER:local-rule}
+    model: ${TICKET_AI_MODEL:local-rules}
+    api-key: ${TICKET_AI_API_KEY:}
+    base-url: ${TICKET_AI_BASE_URL:}

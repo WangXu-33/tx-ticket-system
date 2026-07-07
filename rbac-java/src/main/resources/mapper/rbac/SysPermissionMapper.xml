@@ -15,7 +15,7 @@
     </resultMap>
 
     <select id="selectEffectivePermKeysByUserId" resultType="java.lang.String">
-        SELECT DISTINCT t.perm_key
+        SELECT DISTINCT p.perm_key
         FROM (
             SELECT rp.perm_id
             FROM sys_role_perm rp
@@ -29,7 +29,7 @@
         INNER JOIN sys_permission p ON p.id = t.perm_id
         WHERE p.del_flag = 0
           AND p.status = 1
-        ORDER BY p.id
+        ORDER BY p.perm_key
     </select>
 
     <select id="selectByMenuId" resultMap="BaseResultMap">

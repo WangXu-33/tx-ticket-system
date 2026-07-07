@@ -24,8 +24,8 @@ public class SysConfigController {
         configs.putAll(configService.getConfigsByPrefix("local.storage"));
         configs.putAll(configService.getConfigsByPrefix("file.security"));
         configs.put("system.storage.active", configService.getConfigValue("system.storage.active"));
-        configs.putIfAbsent("file.security.max-size-mb", "20");
-        configs.putIfAbsent("file.security.allowed-suffixes", ".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar");
+        configs.putIfAbsent("file.security.max-size-mb", "200");
+        configs.putIfAbsent("file.security.allowed-suffixes", ".jpg,.jpeg,.png,.gif,.webp,.svg,.bmp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.log,.json,.xml,.csv,.zip,.rar,.mp4,.webm,.mov,.avi");
         configs.putIfAbsent("file.security.blocked-suffixes", ".exe,.bat,.cmd,.sh,.ps1,.jar,.war,.msi,.dll,.com,.scr");
 
         // Mask sensitive data

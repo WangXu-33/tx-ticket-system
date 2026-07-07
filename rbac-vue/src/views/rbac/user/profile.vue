@@ -33,7 +33,7 @@
             <li><UserOutlined /> <span>账号：</span> {{ user.username }}</li>
             <li><PhoneOutlined /> <span>手机：</span> {{ user.phone || '未绑定' }}</li>
             <li><MailOutlined /> <span>邮箱：</span> {{ user.email || '未绑定' }}</li>
-            <li><CalendarOutlined /> <span>加入时间：</span> {{ user.createTime }}</li>
+            <li><CalendarOutlined /> <span>加入时间：</span> {{ formatDateTime(user.createTime) }}</li>
           </ul>
         </a-card>
       </a-col>
@@ -103,6 +103,7 @@ import request from '@/api/request'
 import { message } from 'ant-design-vue'
 import { extractFileId } from '@/utils/file'
 import { getAuthedPreviewUrl, revokeAuthedPreviewUrl } from '@/utils/file-preview'
+import { formatDateTime } from '@/utils/datetime'
 
 const activeTab = ref('basic')
 const user = ref({})

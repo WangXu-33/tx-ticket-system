@@ -88,6 +88,7 @@ const completeLogin = async (credentials, successText = '登录成功') => {
   localStorage.setItem('user', JSON.stringify(res.data.user))
   const info = await request.get('/auth/info')
   localStorage.setItem('permissions', JSON.stringify(info.data.permissions))
+  localStorage.setItem('roles', JSON.stringify(info.data.roles || []))
   refreshPermissionCache()
   message.success(successText)
   router.push('/')
@@ -231,7 +232,61 @@ h1 {
 
 .auth-card :deep(.ant-input),
 .auth-card :deep(.ant-input-affix-wrapper) {
+  min-height: 44px;
   border-radius: 14px;
+  border-color: #d8e7e1;
+  background: #ffffff;
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.auth-card :deep(.ant-input:hover),
+.auth-card :deep(.ant-input-affix-wrapper:hover) {
+  border-color: #9acfc0;
+}
+
+.auth-card :deep(.ant-input:focus),
+.auth-card :deep(.ant-input-focused),
+.auth-card :deep(.ant-input-affix-wrapper-focused) {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.08);
+}
+
+.auth-card :deep(.ant-input-affix-wrapper) {
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+}
+
+.auth-card :deep(.ant-input-affix-wrapper .ant-input) {
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  line-height: 42px;
+}
+
+.auth-card :deep(.ant-input-prefix) {
+  width: 20px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 9px;
+  color: #64748b;
+  background: transparent;
+  line-height: 1;
+  transform: none;
+}
+
+.auth-card :deep(.ant-input-prefix svg) {
+  display: block;
+  font-size: 15px;
+}
+
+.auth-card :deep(.ant-input::selection) {
+  color: #10201b;
+  background: rgba(15, 118, 110, 0.18);
 }
 
 .auth-card :deep(.ant-btn) {

@@ -140,7 +140,7 @@
         <a-descriptions-item label="请求参数"><pre>{{ currentRecord.operParam }}</pre></a-descriptions-item>
         <a-descriptions-item label="返回参数"><pre>{{ currentRecord.jsonResult }}</pre></a-descriptions-item>
         <a-descriptions-item label="错误消息" v-if="currentRecord.status === 1"><span style="color:red">{{ currentRecord.errorMsg }}</span></a-descriptions-item>
-        <a-descriptions-item label="操作时间">{{ currentRecord.operTime }}</a-descriptions-item>
+        <a-descriptions-item label="操作时间">{{ formatDateTime(currentRecord.operTime) }}</a-descriptions-item>
       </a-descriptions>
     </a-drawer>
   </div>
@@ -154,6 +154,7 @@ import { message } from 'ant-design-vue'
 import { useEcharts } from '@/utils/useEcharts'
 import { STATUS_COLORS } from '@/theme/palette'
 import { downloadByRequest } from '@/utils/download'
+import { formatDateTime } from '@/utils/datetime'
 
 const { initChart } = useEcharts()
 
@@ -184,7 +185,7 @@ const columns = [
   { title: '操作人员', dataIndex: 'operName', key: 'operName' },
   { title: '主机IP', dataIndex: 'operIp', key: 'operIp' },
   { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: '操作时间', dataIndex: 'operTime', key: 'operTime' },
+  { title: '操作时间', dataIndex: 'operTime', key: 'operTime', customRender: ({ text }) => formatDateTime(text) },
   { title: '操作', key: 'action', width: 100, fixed: 'right' }
 ]
 
